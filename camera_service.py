@@ -16,10 +16,10 @@ service on purpose):
     needs to know a raw camera IP/RTSP path.
   - Serve a live MJPEG preview of any camera by ID.
   - Persist which camera each *consuming* module currently points at
-    (ACTIVE_CAMERA_ID for Face Recognition, DWELL_CAMERA_ID / POS_CAMERA_ID
-    for the POS-Dwell review panels) so other modules resolve "camera X" to
-    a live stream through this service's API instead of talking to Nx
-    directly.
+    (DWELL_CAMERA_ID / POS_CAMERA_ID for the POS-Dwell review panels, plus
+    any number of additional project-specific camera slots — minimum 2,
+    the two above) so other modules resolve "camera X" to a live stream
+    through this service's API instead of talking to Nx directly.
 
 Explicitly OUT of scope for this module (left in their own modules):
   - ROI polygon definition/overlay and dwell-time logic (ROI/Dwell module).
@@ -31,7 +31,10 @@ Witness directly — see README.md for the internal API contract.
 """
 
 import os
+import signal
+import threading
 import time
+import uuid
 from urllib.parse import quote
 
 import requests
@@ -69,10 +72,14 @@ SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera
 DEFAULT_SETTINGS = {
     # Which Nx camera each consuming module currently points at. Other
     # modules read these via GET /api/settings instead of hardcoding a
-    # camera ID of their own.
-    "ACTIVE_CAMERA_ID": os.environ.get("DEFAULT_CAMERA_ID", ""),  # Face Recognition module watches this one
+    # camera ID of their own. These two are the floor — always present,
+    # never removable via the /api/camera-slots endpoints below.
     "DWELL_CAMERA_ID": "",   # POS-Dwell "Customer Dwell POV" panel
     "POS_CAMERA_ID": "",     # POS-Dwell "POS Camera Feed" panel
+    # Additional, project-specific camera views beyond the floor of 2 above —
+    # added/removed freely via /api/camera-slots. Each entry:
+    # {"id": "<8-hex>", "label": "Camera 3", "camera_id": "<nx camera id>"}
+    "EXTRA_CAMERAS": [],
 }
 
 SETTINGS = dict(DEFAULT_SETTINGS)
@@ -208,10 +215,11 @@ def generate_frames(camera_id: str):
 
 @app.route("/api/stream")
 def video_stream():
-    """?camera_id=<id> — defaults to ACTIVE_CAMERA_ID if omitted."""
-    camera_id = (request.args.get("camera_id") or "").strip("{}") or SETTINGS.get("ACTIVE_CAMERA_ID")
+    """?camera_id=<id> is required — every camera view (Dwell, POS, or any
+    added camera slot) always passes its own camera_id explicitly."""
+    camera_id = (request.args.get("camera_id") or "").strip("{}")
     if not camera_id:
-        return jsonify({"status": "error", "message": "No camera_id given and no ACTIVE_CAMERA_ID configured"}), 400
+        return jsonify({"status": "error", "message": "camera_id query param is required"}), 400
     return Response(generate_frames(camera_id), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
@@ -223,8 +231,6 @@ def video_stream():
 def manage_settings():
     if request.method == "POST":
         data = request.json or {}
-        if "ACTIVE_CAMERA_ID" in data:
-            SETTINGS["ACTIVE_CAMERA_ID"] = str(data["ACTIVE_CAMERA_ID"]).strip("{}")
         if "DWELL_CAMERA_ID" in data:
             SETTINGS["DWELL_CAMERA_ID"] = str(data["DWELL_CAMERA_ID"]).strip("{}")
         if "POS_CAMERA_ID" in data:
@@ -232,6 +238,54 @@ def manage_settings():
         save_settings()
         return jsonify({"message": "Updated"}), 200
     return jsonify(SETTINGS), 200
+
+
+# --- ADDITIONAL CAMERA SLOTS (beyond the floor of Dwell + POS) ---
+# Lets a project add more live camera views than the two built-in ones,
+# without ever going below that floor — there's no route to delete Dwell or
+# POS, only entries created here.
+@app.route("/api/camera-slots", methods=["GET", "POST"])
+def camera_slots():
+    if request.method == "POST":
+        next_number = len(SETTINGS["EXTRA_CAMERAS"]) + 3  # 1=Dwell, 2=POS, extras start at 3
+        slot = {"id": uuid.uuid4().hex[:8], "label": f"Camera {next_number}", "camera_id": ""}
+        SETTINGS["EXTRA_CAMERAS"].append(slot)
+        save_settings()
+        return jsonify(slot), 201
+    return jsonify(SETTINGS["EXTRA_CAMERAS"]), 200
+
+
+@app.route("/api/camera-slots/<slot_id>", methods=["PATCH", "DELETE"])
+def camera_slot(slot_id):
+    slots = SETTINGS["EXTRA_CAMERAS"]
+    idx = next((i for i, s in enumerate(slots) if s["id"] == slot_id), None)
+    if idx is None:
+        return jsonify({"status": "error", "message": "Camera slot not found"}), 404
+
+    if request.method == "DELETE":
+        slots.pop(idx)
+        save_settings()
+        return jsonify({"message": "Removed"}), 200
+
+    data = request.json or {}
+    if "camera_id" in data:
+        slots[idx]["camera_id"] = str(data["camera_id"]).strip("{}")
+    if "label" in data:
+        slots[idx]["label"] = str(data["label"])[:60]
+    save_settings()
+    return jsonify(slots[idx]), 200
+
+
+@app.route("/api/system/shutdown", methods=["POST"])
+def shutdown_system():
+    """Stops this service. The browser-side terminate button calls this then
+    closes its own tab — the process exit is what actually frees the port."""
+    def kill_server():
+        time.sleep(1)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=kill_server, daemon=True).start()
+    return jsonify({"message": "VisionSync shutting down..."}), 200
 
 
 @app.route("/api/health", methods=["GET"])
@@ -262,4 +316,10 @@ def serve_static_page(filename):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5010"))
-    app.run(port=port, debug=False, use_reloader=False)
+    # threaded=True is required, not optional: every camera preview is a
+    # long-lived MJPEG connection that never closes on its own. Without this,
+    # Flask's dev server handles one request at a time, so with 2+ camera
+    # views open at once, every request after the first (a newly switched
+    # camera included) queues behind whichever stream(s) are already open
+    # and never renders.
+    app.run(port=port, debug=False, use_reloader=False, threaded=True)

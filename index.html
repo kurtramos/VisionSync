@@ -49,65 +49,41 @@
             </div>
         </div>
 
-        <!-- Live Preview of the selected Face Recognition camera -->
-        <div id="vid-container" class="mb-8 rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_20px_rgba(34,211,238,0.1)] relative bg-black aspect-video flex items-center justify-center">
-            <img id="live-stream-img" draggable="false" class="w-full h-full object-contain pointer-events-none hidden" alt="Live Camera Feed">
-            <div id="vid-offline" class="flex flex-col items-center justify-center gap-2 text-slate-500 font-mono text-sm">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>
-                <span id="vid-offline-text">NO CAMERA SELECTED</span>
-            </div>
-        </div>
-
-        <!-- Face Recognition camera -->
+        <!-- Camera Views -->
         <div class="pt-4 border-t border-white/5">
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <div class="text-sm font-semibold text-slate-200">Face Recognition Camera</div>
-                    <div class="text-[11px] sm:text-xs text-slate-400 mt-1 font-light">Which Nx camera the Face Recognition module watches — switches live, no restart needed</div>
+                    <div class="text-sm font-semibold text-slate-200">Camera Views</div>
+                    <div class="text-[11px] sm:text-xs text-slate-400 mt-1 font-light">Nx cameras this project pulls live feeds from — Customer Dwell POV and POS Camera Feed are required; add more as a project needs them</div>
                 </div>
-                <button onclick="refreshCameras()" title="Refresh camera list" class="text-slate-400 hover:text-cyan-400 transition-colors p-1.5">
+                <button onclick="refreshCameras()" title="Refresh camera list" class="text-slate-400 hover:text-cyan-400 transition-colors p-1.5 shrink-0">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
             </div>
-            <select id="camera_select" onchange="saveActiveCamera()" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
-                <option value="">Loading cameras...</option>
-            </select>
+
+            <div id="camera-views-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- camera view cards injected by renderCameraViews() -->
+            </div>
+
+            <button onclick="addCameraSlot()" class="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-white/15 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 text-sm font-semibold transition-all duration-300 active:scale-95">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add Camera
+            </button>
+
             <div id="camera_status_msg" class="text-[11px] text-slate-500 mt-2 font-light"></div>
         </div>
 
-        <!-- POS-Dwell review cameras -->
-        <div class="pt-6 mt-6 border-t border-white/5">
-            <div class="text-sm font-semibold text-slate-200">POS-Dwell Review Cameras</div>
-            <div class="text-[11px] sm:text-xs text-slate-400 mt-1 mb-3 font-light">Which Nx cameras the POS-Dwell review panels play back</div>
+        <!-- Control -->
+        <div class="grid grid-cols-1 gap-4 pt-6 mt-6 border-t border-white/5">
+            <button onclick="applyParams()" class="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-bold tracking-wide transition-all duration-300 active:scale-95">
+                <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                Apply Params
+            </button>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="text-xs text-slate-400 mb-2 block">Customer Dwell POV</label>
-                    <div id="dwell-vid-container" class="mb-2 rounded-xl overflow-hidden border border-white/10 relative bg-black aspect-video flex items-center justify-center">
-                        <img id="dwell-stream-img" class="hidden w-full h-full object-contain" alt="Customer Dwell POV preview">
-                        <div id="dwell-vid-offline" class="flex flex-col items-center justify-center gap-1 text-slate-500 font-mono text-[11px]">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>
-                            <span>NO PREVIEW</span>
-                        </div>
-                    </div>
-                    <select id="dwell_camera_select" onchange="saveDwellCameras()" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
-                        <option value="">Loading cameras...</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-xs text-slate-400 mb-2 block">POS Camera Feed</label>
-                    <div id="pos-vid-container" class="mb-2 rounded-xl overflow-hidden border border-white/10 relative bg-black aspect-video flex items-center justify-center">
-                        <img id="pos-stream-img" class="hidden w-full h-full object-contain" alt="POS Camera Feed preview">
-                        <div id="pos-vid-offline" class="flex flex-col items-center justify-center gap-1 text-slate-500 font-mono text-[11px]">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>
-                            <span>NO PREVIEW</span>
-                        </div>
-                    </div>
-                    <select id="pos_camera_select" onchange="saveDwellCameras()" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
-                        <option value="">Loading cameras...</option>
-                    </select>
-                </div>
-            </div>
+            <button onclick="terminateSystem()" class="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/90 hover:text-white hover:border-rose-400 text-sm font-bold tracking-wide transition-all duration-300 active:scale-95 hover:shadow-[0_10px_30px_rgba(225,29,72,0.4)]">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v8l9-11h-7z"></path></svg>
+                Terminate System
+            </button>
         </div>
     </div>
 
@@ -116,19 +92,36 @@
         const API = "http://127.0.0.1:5010/api";
         const STREAM_URL = "http://127.0.0.1:5010/api/stream";
 
-        let currentActiveCameraId = "";
-        let currentDwellCameraId = "";
-        let currentPosCameraId = "";
+        // Every live camera view on the page — the first two (Dwell, POS) are
+        // the floor and can never be removed; anything after that came from
+        // /api/camera-slots and can be added/removed freely, min 2 overall.
+        // { key, label, removable, cameraId }
+        let cameraViews = [];
+        let allCameraEntries = [];
         let cameraOnlineMap = {};
+
+        const OFFLINE_ICON = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>`;
 
         async function fetchState() {
             try {
-                const setRes = await fetch(`${API}/settings`);
+                const [setRes, slotsRes] = await Promise.all([
+                    fetch(`${API}/settings`),
+                    fetch(`${API}/camera-slots`)
+                ]);
                 const settings = await setRes.json();
+                const slots = await slotsRes.json();
 
-                currentActiveCameraId = settings.ACTIVE_CAMERA_ID || "";
-                currentDwellCameraId = settings.DWELL_CAMERA_ID || "";
-                currentPosCameraId = settings.POS_CAMERA_ID || "";
+                cameraViews = [
+                    { key: 'DWELL_CAMERA_ID', label: 'Customer Dwell POV', removable: false, cameraId: settings.DWELL_CAMERA_ID || '' },
+                    { key: 'POS_CAMERA_ID', label: 'POS Camera Feed', removable: false, cameraId: settings.POS_CAMERA_ID || '' },
+                    ...slots.map(s => ({ key: s.id, label: s.label, removable: true, cameraId: s.camera_id || '' }))
+                ];
+
+                // Build the cards themselves first (this is the ONE place a
+                // full rebuild is correct — there's nothing in the DOM yet)
+                // before fetchCameras() fills in online status and previews.
+                renderCameraViews();
+
                 await fetchCameras();
                 checkHealth();
             } catch (e) { console.error("Camera service offline", e); }
@@ -153,80 +146,103 @@
             }
         }
 
-        function setFeedOnlineState(isOnline) {
-            const img = document.getElementById('live-stream-img');
-            const offlineEl = document.getElementById('vid-offline');
-            const offlineText = document.getElementById('vid-offline-text');
-
-            if (!currentActiveCameraId) {
-                img.classList.add('hidden'); img.removeAttribute('src');
-                offlineEl.classList.remove('hidden'); offlineText.innerText = 'NO CAMERA SELECTED';
-                return;
-            }
-            if (isOnline === false) {
-                img.classList.add('hidden'); img.removeAttribute('src');
-                offlineEl.classList.remove('hidden'); offlineText.innerText = 'CAMERA OFFLINE';
-                return;
-            }
-            offlineEl.classList.add('hidden');
-            img.classList.remove('hidden');
-            img.src = `${STREAM_URL}?camera_id=${currentActiveCameraId}&t=${Date.now()}`;
+        function cardHTML(view) {
+            return `
+            <div class="camera-card" data-key="${view.key}">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-slate-400 block">${view.label}</label>
+                    ${view.removable ? `<button onclick="removeCameraSlot('${view.key}')" title="Remove this camera" class="text-slate-500 hover:text-rose-400 transition-colors text-xs px-1">✕</button>` : ''}
+                </div>
+                <div class="mb-2 rounded-xl overflow-hidden border border-white/10 relative bg-black aspect-video flex items-center justify-center">
+                    <img data-role="stream" class="hidden w-full h-full object-contain" alt="${view.label} preview">
+                    <div data-role="offline" class="flex flex-col items-center justify-center gap-1 text-slate-500 font-mono text-[11px]">
+                        ${OFFLINE_ICON}
+                        <span data-role="offline-text">NO PREVIEW</span>
+                    </div>
+                </div>
+                <select data-role="select" onchange="handleCameraChange('${view.key}', ${view.removable})" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
+                    <option value="">Loading cameras...</option>
+                </select>
+            </div>`;
         }
 
-        function updateDwellPreview(kind, cameraId) {
-            const img = document.getElementById(`${kind}-stream-img`);
-            const offlineEl = document.getElementById(`${kind}-vid-offline`);
-
-            if (!cameraId) {
-                img.classList.add('hidden'); img.removeAttribute('src');
-                offlineEl.classList.remove('hidden');
-                offlineEl.querySelector('span').innerText = 'NO CAMERA SELECTED';
-                return;
-            }
-            if (cameraOnlineMap[cameraId] === false) {
-                img.classList.add('hidden'); img.removeAttribute('src');
-                offlineEl.classList.remove('hidden');
-                offlineEl.querySelector('span').innerText = 'CAMERA OFFLINE';
-                return;
-            }
-            offlineEl.classList.add('hidden');
-            img.classList.remove('hidden');
-            if (img.dataset.cameraId !== cameraId) {
-                img.dataset.cameraId = cameraId;
-                img.src = `${STREAM_URL}?camera_id=${cameraId}&t=${Date.now()}`;
-            }
+        function cardFor(key) {
+            return document.querySelector(`.camera-card[data-key="${key}"]`);
         }
 
-        function populateCameraSelect(select, entries, selectedId, isBackgroundRefresh) {
-            const selectIsOpen = isBackgroundRefresh && document.activeElement === select;
-            if (selectIsOpen) return;
+        // Full rebuild — only for the very first load. Every later refresh
+        // must update cards in place (see refreshAllCards) so it never tears
+        // down an <img> that's already streaming fine.
+        function renderCameraViews() {
+            const grid = document.getElementById('camera-views-grid');
+            grid.innerHTML = cameraViews.map(cardHTML).join('');
+            refreshAllCards();
+        }
 
-            if (entries.length === 0) {
+        // Updates every existing card's <select> options and preview in
+        // place — never touches the <img>/<select> DOM nodes themselves, so
+        // an already-connected MJPEG stream is left alone. This is what both
+        // the manual refresh button and the periodic background poll call;
+        // there is no separate "hard refresh" path anymore.
+        function refreshAllCards() {
+            cameraViews.forEach(view => {
+                const card = cardFor(view.key);
+                if (!card) return;
+                populateSelectForCard(card, view);
+                updatePreviewForCard(card, view);
+            });
+        }
+
+        function populateSelectForCard(card, view) {
+            const select = card.querySelector('[data-role="select"]');
+            if (document.activeElement === select) return; // don't yank an open dropdown out from under the user
+
+            if (allCameraEntries.length === 0) {
                 select.innerHTML = '<option value="">No cameras found on Nx</option>';
                 return;
             }
 
-            const sorted = [...entries].sort((a, b) => (b.online === true) - (a.online === true));
-            select.innerHTML = sorted.map(cam => {
+            // Always lead with an explicit "unselected" option — without one,
+            // an empty view.cameraId ('' — e.g. a freshly added camera slot)
+            // leaves no <option> marked selected, and the browser silently
+            // falls back to showing whichever camera happens to be first in
+            // the list. That LOOKED like a camera was assigned when nothing
+            // had actually been saved yet.
+            const sorted = [...allCameraEntries].sort((a, b) => (b.online === true) - (a.online === true));
+            const placeholder = `<option value="" ${!view.cameraId ? 'selected' : ''} style="color:#64748b;background-color:#0f172a">— Select a camera —</option>`;
+            select.innerHTML = placeholder + sorted.map(cam => {
                 const label = `${cam.name || cam.id} ${cam.online ? '● Online' : '○ Offline'}`;
-                const selected = cam.id === selectedId ? 'selected' : '';
+                const selected = cam.id === view.cameraId ? 'selected' : '';
                 const color = cam.online ? '#34d399' : '#f43f5e';
                 return `<option value="${cam.id}" ${selected} style="color:${color};background-color:#0f172a">${label}</option>`;
             }).join('');
         }
 
-        async function fetchCameras(isBackgroundRefresh = false, force = false) {
-            const select = document.getElementById('camera_select');
-            const dwellSelect = document.getElementById('dwell_camera_select');
-            const posSelect = document.getElementById('pos_camera_select');
-            const statusMsg = document.getElementById('camera_status_msg');
+        function updatePreviewForCard(card, view) {
+            const img = card.querySelector('[data-role="stream"]');
+            const offlineEl = card.querySelector('[data-role="offline"]');
+            const offlineText = card.querySelector('[data-role="offline-text"]');
 
-            if (!isBackgroundRefresh) {
-                select.innerHTML = '<option value="">Loading cameras...</option>';
-                dwellSelect.innerHTML = '<option value="">Loading cameras...</option>';
-                posSelect.innerHTML = '<option value="">Loading cameras...</option>';
-                statusMsg.innerText = "";
+            if (!view.cameraId) {
+                img.classList.add('hidden'); img.removeAttribute('src'); img.dataset.cameraId = '';
+                offlineEl.classList.remove('hidden'); offlineText.innerText = 'NO CAMERA SELECTED';
+                return;
             }
+            if (cameraOnlineMap[view.cameraId] === false) {
+                img.classList.add('hidden'); img.removeAttribute('src'); img.dataset.cameraId = '';
+                offlineEl.classList.remove('hidden'); offlineText.innerText = 'CAMERA OFFLINE';
+                return;
+            }
+            offlineEl.classList.add('hidden');
+            img.classList.remove('hidden');
+            if (img.dataset.cameraId !== view.cameraId) {
+                img.dataset.cameraId = view.cameraId;
+                img.src = `${STREAM_URL}?camera_id=${view.cameraId}&t=${Date.now()}`;
+            }
+        }
+
+        async function fetchCameras(force = false) {
+            const statusMsg = document.getElementById('camera_status_msg');
 
             try {
                 const url = force ? `${API}/cameras?force=1` : `${API}/cameras`;
@@ -234,89 +250,138 @@
                 const cameras = await res.json();
                 if (cameras.error || cameras.status === 'error') throw new Error(cameras.message || cameras.error);
 
-                const entries = Object.values(cameras);
+                allCameraEntries = Object.values(cameras);
                 cameraOnlineMap = {};
-                entries.forEach(cam => { cameraOnlineMap[cam.id] = cam.online; });
+                allCameraEntries.forEach(cam => { cameraOnlineMap[cam.id] = cam.online; });
 
-                populateCameraSelect(select, entries, currentActiveCameraId, isBackgroundRefresh);
-                populateCameraSelect(dwellSelect, entries, currentDwellCameraId, isBackgroundRefresh);
-                populateCameraSelect(posSelect, entries, currentPosCameraId, isBackgroundRefresh);
-
-                updateDwellPreview('dwell', currentDwellCameraId);
-                updateDwellPreview('pos', currentPosCameraId);
-
-                if (entries.length > 0 && !entries.some(cam => cam.id === currentActiveCameraId)) {
-                    statusMsg.innerText = currentActiveCameraId
-                        ? "Currently-selected camera wasn't found in this list — it may have been removed from Nx."
-                        : "";
-                } else if (!isBackgroundRefresh) {
-                    statusMsg.innerText = "";
-                }
-
-                setFeedOnlineState(cameraOnlineMap[currentActiveCameraId]);
+                refreshAllCards();
+                statusMsg.innerText = "";
                 return true;
             } catch (e) {
-                if (!isBackgroundRefresh) {
-                    select.innerHTML = '<option value="">Failed to load cameras</option>';
-                    dwellSelect.innerHTML = '<option value="">Failed to load cameras</option>';
-                    posSelect.innerHTML = '<option value="">Failed to load cameras</option>';
-                }
                 statusMsg.innerText = "Could not reach the camera list. Is camera_service.py running?";
                 console.error("Camera fetch error:", e);
                 return false;
             }
         }
 
+        // Bypasses the 5-minute server-side cache, but still only updates
+        // cards in place — it never rebuilds the grid, so already-playing
+        // previews keep playing straight through a manual refresh.
         async function refreshCameras() {
-            const ok = await fetchCameras(false, true);
+            const ok = await fetchCameras(true);
             showToast(ok ? "CAMERA LIST REFRESHED" : "CAMERA REFRESH FAILED", !ok);
         }
 
-        async function saveActiveCamera() {
-            const select = document.getElementById('camera_select');
-            const statusMsg = document.getElementById('camera_status_msg');
+        // Shared handler for every card's <select> — fixed views (Dwell/POS)
+        // save through /api/settings, added camera slots through
+        // /api/camera-slots/<id>.
+        async function handleCameraChange(key, removable) {
+            const card = cardFor(key);
+            const select = card.querySelector('[data-role="select"]');
             const newId = select.value;
-            if (!newId) return;
 
-            setFeedOnlineState(cameraOnlineMap[newId]);
-            statusMsg.innerText = "Switching camera...";
+            const view = cameraViews.find(v => v.key === key);
+            view.cameraId = newId;
+            updatePreviewForCard(card, view);
+
             try {
-                const res = await fetch(`${API}/settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ACTIVE_CAMERA_ID: newId })
-                });
+                const res = removable
+                    ? await fetch(`${API}/camera-slots/${encodeURIComponent(key)}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ camera_id: newId })
+                    })
+                    : await fetch(`${API}/settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ [key]: newId })
+                    });
                 if (!res.ok) throw new Error("Save failed");
-                currentActiveCameraId = newId;
-                statusMsg.innerText = "Camera switched — the Face Recognition module will pick this up on its next poll.";
-                showToast("ACTIVE CAMERA UPDATED", false);
+                showToast(`${view.label.toUpperCase()} UPDATED`, false);
             } catch (e) {
-                statusMsg.innerText = "Failed to switch camera. Check camera_service.py is running.";
-                console.error("Camera switch error:", e);
+                showToast("FAILED TO SAVE CAMERA", true);
+                console.error("Camera save error:", e);
             }
         }
 
-        async function saveDwellCameras() {
-            const dwellId = document.getElementById('dwell_camera_select').value;
-            const posId = document.getElementById('pos_camera_select').value;
+        // Only inserts the one new card — existing cards are left completely
+        // alone, so their live previews don't reconnect just because a
+        // different camera was added.
+        async function addCameraSlot() {
+            try {
+                const res = await fetch(`${API}/camera-slots`, { method: 'POST' });
+                if (!res.ok) throw new Error("Failed");
+                const slot = await res.json();
+                const view = { key: slot.id, label: slot.label, removable: true, cameraId: '' };
+                cameraViews.push(view);
 
-            updateDwellPreview('dwell', dwellId);
-            updateDwellPreview('pos', posId);
+                document.getElementById('camera-views-grid').insertAdjacentHTML('beforeend', cardHTML(view));
+                const card = cardFor(view.key);
+                populateSelectForCard(card, view);
+                updatePreviewForCard(card, view);
 
+                showToast("CAMERA ADDED", false);
+            } catch (e) {
+                showToast("FAILED TO ADD CAMERA", true);
+                console.error("Add camera error:", e);
+            }
+        }
+
+        // Only removes the one card — same reasoning as addCameraSlot.
+        async function removeCameraSlot(key) {
+            if (!confirm("Remove this camera view?")) return;
+            try {
+                const res = await fetch(`${API}/camera-slots/${encodeURIComponent(key)}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Failed");
+                cameraViews = cameraViews.filter(v => v.key !== key);
+                const card = cardFor(key);
+                if (card) card.remove();
+                showToast("CAMERA REMOVED", false);
+            } catch (e) {
+                showToast("FAILED TO REMOVE CAMERA", true);
+                console.error("Remove camera error:", e);
+            }
+        }
+
+        // "Apply Params" has no sliders of its own to save here (ROI and the
+        // Face-Rec engine's own params intentionally live in their own
+        // modules, not VisionSync) — it re-POSTs the Dwell/POS camera picks
+        // as a manual "confirm/save" action mirroring the button in the
+        // original settings.html dashboard. Added camera slots already save
+        // instantly on change, so there's nothing extra to apply for those.
+        async function applyParams() {
+            const dwell = cameraViews.find(v => v.key === 'DWELL_CAMERA_ID');
+            const pos = cameraViews.find(v => v.key === 'POS_CAMERA_ID');
             try {
                 const res = await fetch(`${API}/settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ DWELL_CAMERA_ID: dwellId, POS_CAMERA_ID: posId })
+                    body: JSON.stringify({
+                        DWELL_CAMERA_ID: dwell ? dwell.cameraId : '',
+                        POS_CAMERA_ID: pos ? pos.cameraId : ''
+                    })
                 });
                 if (!res.ok) throw new Error("Save failed");
-                currentDwellCameraId = dwellId;
-                currentPosCameraId = posId;
-                showToast("DWELL CAMERAS UPDATED", false);
+                showToast("PARAMETERS APPLIED", false);
             } catch (e) {
-                showToast("FAILED TO SAVE DWELL CAMERAS", true);
-                console.error("Dwell camera save error:", e);
+                showToast("FAILED TO APPLY PARAMETERS", true);
+                console.error("Apply params error:", e);
             }
+        }
+
+        // Stops camera_service.py, then closes this tab. window.close() only
+        // works in browsers that let a page close a tab it didn't itself
+        // open with window.open() — if it doesn't close, the service is
+        // still down; just close the tab by hand.
+        async function terminateSystem() {
+            if (!confirm("Shut down VisionSync completely? This stops the camera service and closes this tab.")) return;
+            try {
+                await fetch(`${API}/system/shutdown`, { method: 'POST' });
+            } catch (e) {
+                // Service may already be on its way down — ignore.
+            }
+            showToast("SYSTEM SHUTDOWN INITIATED", true);
+            setTimeout(() => window.close(), 1500);
         }
 
         function showToast(message, isDanger) {
@@ -335,7 +400,7 @@
 
         fetchState();
         setInterval(checkHealth, 5000);
-        setInterval(() => fetchCameras(true), 8000);
+        setInterval(() => fetchCameras(), 8000);
     </script>
 </body>
 </html>
