@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionSync — Camera Configuration</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    animation: {
+                        'float-slow': 'float 8s ease-in-out infinite',
+                        'float-delayed': 'float 10s ease-in-out 4s infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0) scale(1)' },
+                            '50%': { transform: 'translateY(-20px) scale(1.05)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4 sm:p-8 relative overflow-hidden">
+
+    <div class="absolute top-0 left-0 w-72 h-72 sm:w-96 sm:h-96 bg-cyan-600/30 rounded-full mix-blend-screen filter blur-[80px] sm:blur-[120px] animate-float-slow transform -translate-x-1/2 -translate-y-1/4"></div>
+    <div class="absolute bottom-0 right-0 w-72 h-72 sm:w-96 sm:h-96 bg-purple-600/30 rounded-full mix-blend-screen filter blur-[80px] sm:blur-[120px] animate-float-delayed transform translate-x-1/4 translate-y-1/4"></div>
+
+    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 -translate-y-[150%] transition-transform duration-500 ease-out bg-emerald-400/90 text-slate-950 px-6 py-2.5 rounded-full font-bold text-sm tracking-wide shadow-[0_0_30px_rgba(52,211,153,0.4)] z-50 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+        <span id="toast-text">SAVED</span>
+    </div>
+
+    <div class="relative z-10 w-full max-w-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-3xl p-6 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] h-[95vh] overflow-y-auto">
+
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sticky top-0 bg-slate-950/20 backdrop-blur-md p-2 rounded-xl z-20">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">VisionSync</h1>
+                <div class="text-xs text-slate-400 font-light">Camera Configuration — by Sentivise.AI</div>
+            </div>
+            <div id="status-badge" class="flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-bold tracking-wider uppercase transition-all duration-300">
+                <div id="status-dot" class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,1)] transition-colors duration-300"></div>
+                <span id="status-text" class="text-slate-300">Checking Nx...</span>
+            </div>
+        </div>
+
+        <!-- Live Preview of the selected Face Recognition camera -->
+        <div id="vid-container" class="mb-8 rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_20px_rgba(34,211,238,0.1)] relative bg-black aspect-video flex items-center justify-center">
+            <img id="live-stream-img" draggable="false" class="w-full h-full object-contain pointer-events-none hidden" alt="Live Camera Feed">
+            <div id="vid-offline" class="flex flex-col items-center justify-center gap-2 text-slate-500 font-mono text-sm">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>
+                <span id="vid-offline-text">NO CAMERA SELECTED</span>
+            </div>
+        </div>
+
+        <!-- Face Recognition camera -->
+        <div class="pt-4 border-t border-white/5">
+            <div class="flex justify-between items-start mb-3">
+                <div>
+                    <div class="text-sm font-semibold text-slate-200">Face Recognition Camera</div>
+                    <div class="text-[11px] sm:text-xs text-slate-400 mt-1 font-light">Which Nx camera the Face Recognition module watches — switches live, no restart needed</div>
+                </div>
+                <button onclick="refreshCameras()" title="Refresh camera list" class="text-slate-400 hover:text-cyan-400 transition-colors p-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
+            <select id="camera_select" onchange="saveActiveCamera()" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
+                <option value="">Loading cameras...</option>
+            </select>
+            <div id="camera_status_msg" class="text-[11px] text-slate-500 mt-2 font-light"></div>
+        </div>
+
+        <!-- POS-Dwell review cameras -->
+        <div class="pt-6 mt-6 border-t border-white/5">
+            <div class="text-sm font-semibold text-slate-200">POS-Dwell Review Cameras</div>
+            <div class="text-[11px] sm:text-xs text-slate-400 mt-1 mb-3 font-light">Which Nx cameras the POS-Dwell review panels play back</div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 mb-2 block">Customer Dwell POV</label>
+                    <div id="dwell-vid-container" class="mb-2 rounded-xl overflow-hidden border border-white/10 relative bg-black aspect-video flex items-center justify-center">
+                        <img id="dwell-stream-img" class="hidden w-full h-full object-contain" alt="Customer Dwell POV preview">
+                        <div id="dwell-vid-offline" class="flex flex-col items-center justify-center gap-1 text-slate-500 font-mono text-[11px]">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>
+                            <span>NO PREVIEW</span>
+                        </div>
+                    </div>
+                    <select id="dwell_camera_select" onchange="saveDwellCameras()" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
+                        <option value="">Loading cameras...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-2 block">POS Camera Feed</label>
+                    <div id="pos-vid-container" class="mb-2 rounded-xl overflow-hidden border border-white/10 relative bg-black aspect-video flex items-center justify-center">
+                        <img id="pos-stream-img" class="hidden w-full h-full object-contain" alt="POS Camera Feed preview">
+                        <div id="pos-vid-offline" class="flex flex-col items-center justify-center gap-1 text-slate-500 font-mono text-[11px]">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3l18 18M10.5 6H16a2 2 0 012 2v7.5M6 6.5V16a2 2 0 002 2h9.5M15 10l4.553-2.276A1 1 0 0121 8.618v6.764"></path></svg>
+                            <span>NO PREVIEW</span>
+                        </div>
+                    </div>
+                    <select id="pos_camera_select" onchange="saveDwellCameras()" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
+                        <option value="">Loading cameras...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Point this at wherever camera_service.py is actually running.
+        const API = "http://127.0.0.1:5010/api";
+        const STREAM_URL = "http://127.0.0.1:5010/api/stream";
+
+        let currentActiveCameraId = "";
+        let currentDwellCameraId = "";
+        let currentPosCameraId = "";
+        let cameraOnlineMap = {};
+
+        async function fetchState() {
+            try {
+                const setRes = await fetch(`${API}/settings`);
+                const settings = await setRes.json();
+
+                currentActiveCameraId = settings.ACTIVE_CAMERA_ID || "";
+                currentDwellCameraId = settings.DWELL_CAMERA_ID || "";
+                currentPosCameraId = settings.POS_CAMERA_ID || "";
+                await fetchCameras();
+                checkHealth();
+            } catch (e) { console.error("Camera service offline", e); }
+        }
+
+        async function checkHealth() {
+            const statusText = document.getElementById('status-text');
+            const statusDot = document.getElementById('status-dot');
+            try {
+                const res = await fetch(`${API}/health`);
+                const data = await res.json();
+                if (data.nx_reachable) {
+                    statusText.innerText = "NX CONNECTED";
+                    statusDot.className = "w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,1)] transition-colors duration-300";
+                } else {
+                    statusText.innerText = "NX UNREACHABLE";
+                    statusDot.className = "w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,1)] transition-colors duration-300";
+                }
+            } catch (e) {
+                statusText.innerText = "SERVICE OFFLINE";
+                statusDot.className = "w-2 h-2 rounded-full bg-slate-500 shadow-[0_0_12px_rgba(100,116,139,1)] transition-colors duration-300";
+            }
+        }
+
+        function setFeedOnlineState(isOnline) {
+            const img = document.getElementById('live-stream-img');
+            const offlineEl = document.getElementById('vid-offline');
+            const offlineText = document.getElementById('vid-offline-text');
+
+            if (!currentActiveCameraId) {
+                img.classList.add('hidden'); img.removeAttribute('src');
+                offlineEl.classList.remove('hidden'); offlineText.innerText = 'NO CAMERA SELECTED';
+                return;
+            }
+            if (isOnline === false) {
+                img.classList.add('hidden'); img.removeAttribute('src');
+                offlineEl.classList.remove('hidden'); offlineText.innerText = 'CAMERA OFFLINE';
+                return;
+            }
+            offlineEl.classList.add('hidden');
+            img.classList.remove('hidden');
+            img.src = `${STREAM_URL}?camera_id=${currentActiveCameraId}&t=${Date.now()}`;
+        }
+
+        function updateDwellPreview(kind, cameraId) {
+            const img = document.getElementById(`${kind}-stream-img`);
+            const offlineEl = document.getElementById(`${kind}-vid-offline`);
+
+            if (!cameraId) {
+                img.classList.add('hidden'); img.removeAttribute('src');
+                offlineEl.classList.remove('hidden');
+                offlineEl.querySelector('span').innerText = 'NO CAMERA SELECTED';
+                return;
+            }
+            if (cameraOnlineMap[cameraId] === false) {
+                img.classList.add('hidden'); img.removeAttribute('src');
+                offlineEl.classList.remove('hidden');
+                offlineEl.querySelector('span').innerText = 'CAMERA OFFLINE';
+                return;
+            }
+            offlineEl.classList.add('hidden');
+            img.classList.remove('hidden');
+            if (img.dataset.cameraId !== cameraId) {
+                img.dataset.cameraId = cameraId;
+                img.src = `${STREAM_URL}?camera_id=${cameraId}&t=${Date.now()}`;
+            }
+        }
+
+        function populateCameraSelect(select, entries, selectedId, isBackgroundRefresh) {
+            const selectIsOpen = isBackgroundRefresh && document.activeElement === select;
+            if (selectIsOpen) return;
+
+            if (entries.length === 0) {
+                select.innerHTML = '<option value="">No cameras found on Nx</option>';
+                return;
+            }
+
+            const sorted = [...entries].sort((a, b) => (b.online === true) - (a.online === true));
+            select.innerHTML = sorted.map(cam => {
+                const label = `${cam.name || cam.id} ${cam.online ? '● Online' : '○ Offline'}`;
+                const selected = cam.id === selectedId ? 'selected' : '';
+                const color = cam.online ? '#34d399' : '#f43f5e';
+                return `<option value="${cam.id}" ${selected} style="color:${color};background-color:#0f172a">${label}</option>`;
+            }).join('');
+        }
+
+        async function fetchCameras(isBackgroundRefresh = false, force = false) {
+            const select = document.getElementById('camera_select');
+            const dwellSelect = document.getElementById('dwell_camera_select');
+            const posSelect = document.getElementById('pos_camera_select');
+            const statusMsg = document.getElementById('camera_status_msg');
+
+            if (!isBackgroundRefresh) {
+                select.innerHTML = '<option value="">Loading cameras...</option>';
+                dwellSelect.innerHTML = '<option value="">Loading cameras...</option>';
+                posSelect.innerHTML = '<option value="">Loading cameras...</option>';
+                statusMsg.innerText = "";
+            }
+
+            try {
+                const url = force ? `${API}/cameras?force=1` : `${API}/cameras`;
+                const res = await fetch(url);
+                const cameras = await res.json();
+                if (cameras.error || cameras.status === 'error') throw new Error(cameras.message || cameras.error);
+
+                const entries = Object.values(cameras);
+                cameraOnlineMap = {};
+                entries.forEach(cam => { cameraOnlineMap[cam.id] = cam.online; });
+
+                populateCameraSelect(select, entries, currentActiveCameraId, isBackgroundRefresh);
+                populateCameraSelect(dwellSelect, entries, currentDwellCameraId, isBackgroundRefresh);
+                populateCameraSelect(posSelect, entries, currentPosCameraId, isBackgroundRefresh);
+
+                updateDwellPreview('dwell', currentDwellCameraId);
+                updateDwellPreview('pos', currentPosCameraId);
+
+                if (entries.length > 0 && !entries.some(cam => cam.id === currentActiveCameraId)) {
+                    statusMsg.innerText = currentActiveCameraId
+                        ? "Currently-selected camera wasn't found in this list — it may have been removed from Nx."
+                        : "";
+                } else if (!isBackgroundRefresh) {
+                    statusMsg.innerText = "";
+                }
+
+                setFeedOnlineState(cameraOnlineMap[currentActiveCameraId]);
+                return true;
+            } catch (e) {
+                if (!isBackgroundRefresh) {
+                    select.innerHTML = '<option value="">Failed to load cameras</option>';
+                    dwellSelect.innerHTML = '<option value="">Failed to load cameras</option>';
+                    posSelect.innerHTML = '<option value="">Failed to load cameras</option>';
+                }
+                statusMsg.innerText = "Could not reach the camera list. Is camera_service.py running?";
+                console.error("Camera fetch error:", e);
+                return false;
+            }
+        }
+
+        async function refreshCameras() {
+            const ok = await fetchCameras(false, true);
+            showToast(ok ? "CAMERA LIST REFRESHED" : "CAMERA REFRESH FAILED", !ok);
+        }
+
+        async function saveActiveCamera() {
+            const select = document.getElementById('camera_select');
+            const statusMsg = document.getElementById('camera_status_msg');
+            const newId = select.value;
+            if (!newId) return;
+
+            setFeedOnlineState(cameraOnlineMap[newId]);
+            statusMsg.innerText = "Switching camera...";
+            try {
+                const res = await fetch(`${API}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ACTIVE_CAMERA_ID: newId })
+                });
+                if (!res.ok) throw new Error("Save failed");
+                currentActiveCameraId = newId;
+                statusMsg.innerText = "Camera switched — the Face Recognition module will pick this up on its next poll.";
+                showToast("ACTIVE CAMERA UPDATED", false);
+            } catch (e) {
+                statusMsg.innerText = "Failed to switch camera. Check camera_service.py is running.";
+                console.error("Camera switch error:", e);
+            }
+        }
+
+        async function saveDwellCameras() {
+            const dwellId = document.getElementById('dwell_camera_select').value;
+            const posId = document.getElementById('pos_camera_select').value;
+
+            updateDwellPreview('dwell', dwellId);
+            updateDwellPreview('pos', posId);
+
+            try {
+                const res = await fetch(`${API}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ DWELL_CAMERA_ID: dwellId, POS_CAMERA_ID: posId })
+                });
+                if (!res.ok) throw new Error("Save failed");
+                currentDwellCameraId = dwellId;
+                currentPosCameraId = posId;
+                showToast("DWELL CAMERAS UPDATED", false);
+            } catch (e) {
+                showToast("FAILED TO SAVE DWELL CAMERAS", true);
+                console.error("Dwell camera save error:", e);
+            }
+        }
+
+        function showToast(message, isDanger) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-text').innerText = message;
+            if (isDanger) {
+                t.classList.remove('bg-emerald-400/90', 'shadow-[0_0_30px_rgba(52,211,153,0.4)]');
+                t.classList.add('bg-rose-500/90', 'shadow-[0_0_30px_rgba(244,63,94,0.4)]', 'text-white');
+            } else {
+                t.classList.add('bg-emerald-400/90', 'shadow-[0_0_30px_rgba(52,211,153,0.4)]');
+                t.classList.remove('bg-rose-500/90', 'shadow-[0_0_30px_rgba(244,63,94,0.4)]', 'text-white');
+            }
+            t.classList.remove('-translate-y-[150%]');
+            setTimeout(() => t.classList.add('-translate-y-[150%]'), 3000);
+        }
+
+        fetchState();
+        setInterval(checkHealth, 5000);
+        setInterval(() => fetchCameras(true), 8000);
+    </script>
+</body>
+</html>
