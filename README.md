@@ -58,9 +58,12 @@ Defaults to `http://127.0.0.1:5010`. Open `/` for the VisionSync UI.
 
 On Windows, `Start_VisionSync_System.bat` (silent, `pythonw`) and
 `Start_Debug_VisionSync_System.bat` (visible console window, for
-troubleshooting) do the above plus open the UI automatically. The
-Terminate System button in the UI calls `/api/system/shutdown` and closes
-the tab — it only stops VisionSync's own process.
+troubleshooting) do the above plus open the UI automatically. On
+Linux/macOS, `./start_visionsync.sh` (background) and
+`./start_visionsync.sh --debug` (foreground, visible output) are the
+equivalents. The Terminate System button in the UI calls
+`/api/system/shutdown` and closes the tab — it only stops VisionSync's own
+process.
 
 ## Internal API contract
 

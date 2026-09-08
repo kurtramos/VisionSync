@@ -1,0 +1,5 @@
+# Force LF regardless of platform/local core.autocrlf — a CRLF shell script
+# fails on Linux with "bad interpreter: /bin/bash^M: no such file or directory".
+*.sh text eol=lf
+*.py text eol=lf
+*.service.example text eol=lf

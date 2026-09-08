@@ -1,0 +1,24 @@
+[Unit]
+Description=VisionSync — Camera Configuration Service (Sentivise.AI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Update these two paths for the target machine, then copy this file to
+# /etc/systemd/system/visionsync.service (drop the .example suffix).
+WorkingDirectory=/opt/visionsync
+ExecStart=/usr/bin/python3 /opt/visionsync/camera_service.py
+# camera_service.py already calls load_dotenv(), which reads ./.env — this
+# just makes PORT etc. visible to systemd/journald too if you ever query them.
+EnvironmentFile=/opt/visionsync/.env
+
+Restart=on-failure
+RestartSec=5
+
+# Run as a dedicated, unprivileged user rather than root.
+User=visionsync
+Group=visionsync
+
+[Install]
+WantedBy=multi-user.target

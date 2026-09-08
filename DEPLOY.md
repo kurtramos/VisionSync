@@ -7,10 +7,9 @@ VisionSync running and pointed at the right Nx Witness server.
 
 ## 1. Prerequisites
 
-- **Python 3.9+** on the target machine (Windows, since the `Start_*.bat`
-  scripts are Windows batch files — the service itself runs fine on
-  Linux/macOS too, you'd just launch it with `python camera_service.py`
-  directly instead).
+- **Python 3.9+** on the target machine. Windows uses the `Start_*.bat`
+  scripts; Linux/macOS uses `start_visionsync.sh` (see step 5) — both just
+  wrap `python camera_service.py`.
 - Network access from this machine to the Nx Witness server (cloud relay
   URL, or LAN IP) **and** to its RTSP relay port.
 - The Nx Witness Server credential (username/password) for the site this
@@ -86,14 +85,25 @@ Stop this test run (`Ctrl+C`) once confirmed.
 - Use `Start_Debug_VisionSync_System.bat` instead if something's wrong and
   you need to see the service's console output/errors.
 
-**Linux/macOS, or running as a background service:**
+**Linux/macOS, day-to-day use:**
 ```bash
-python camera_service.py
+./start_visionsync.sh          # background, opens the UI (like the .bat's silent mode)
+./start_visionsync.sh --debug  # foreground, console output visible
 ```
-Wrap this in whatever your platform uses to keep a process alive and
-restart it on crash/reboot — systemd unit, pm2, supervisor, a Docker
-container, etc. There's no bundled equivalent to the `.bat` scripts for
-non-Windows yet.
+(Run `chmod +x start_visionsync.sh` once if it isn't already executable —
+git usually preserves the bit, but a zip download won't.)
+
+**Running as a background service (systemd):**
+Copy `visionsync.service.example` to `/etc/systemd/system/visionsync.service`,
+edit the `WorkingDirectory`/`ExecStart`/`EnvironmentFile` paths and the
+`User`/`Group` for your box, then:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now visionsync
+```
+pm2, supervisor, or a Docker container work just as well if that's what the
+rest of your stack already uses — the service itself is just
+`python camera_service.py` with `.env` next to it.
 
 **Auto-start on Windows boot/login** (optional): place a shortcut to
 `Start_VisionSync_System.bat` in
@@ -143,8 +153,10 @@ is.
 - **Port already in use:** another process (maybe a previous
   `camera_service.py` that didn't shut down cleanly) is holding port 5010.
   Windows: `netstat -ano | findstr :5010` to find the PID, then
-  `taskkill /PID <pid> /F` — or just use the UI's Terminate System button
-  next time instead of closing the console window directly.
+  `taskkill /PID <pid> /F`. Linux/macOS: `lsof -i :5010` (or
+  `fuser 5010/tcp`) to find the PID, then `kill <pid>`. Either platform —
+  use the UI's Terminate System button next time instead of closing the
+  console/terminal directly.
 - **`camera_settings.json` is gitignored on purpose** — it's per-machine
   state (which cameras are picked on *this* box), not something to commit
   or copy between sites.
