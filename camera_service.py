@@ -189,6 +189,37 @@ def get_camera(camera_id):
     return jsonify(data[clean_id]), 200
 
 
+@app.route("/api/internal/resolve-camera", methods=["GET"])
+def resolve_camera():
+    """INTERNAL / SERVICE-TO-SERVICE ONLY — not meant for the browser.
+
+    Returns a camera's actual playable RTSP URL with NX credentials embedded
+    (via build_rtsp_url()). This is the one sanctioned way another backend
+    module (e.g. ROI_Polygon) turns a camera_id into a stream it can open
+    directly for its own processing, without ever holding an NX credential
+    or constructing an RTSP URL itself — see README's "What this module
+    deliberately does NOT own". Same trust model as every other endpoint
+    here today (no auth) — keep this port off untrusted networks.
+    """
+    camera_id = (request.args.get("camera_id") or "").strip("{}")
+    if not camera_id:
+        return jsonify({"status": "error", "message": "camera_id query param is required"}), 400
+
+    cameras, status = get_cameras()
+    if status != 200:
+        return cameras, status
+    data = cameras.get_json()
+    cam = data.get(camera_id)
+    if not cam:
+        return jsonify({"status": "error", "message": "Camera not found"}), 404
+
+    return jsonify({
+        "id": camera_id,
+        "name": cam.get("name"),
+        "rtsp_url": build_rtsp_url(camera_id),
+    }), 200
+
+
 # --- LIVE PREVIEW STREAM ---
 def generate_frames(camera_id: str):
     """Streams one Nx camera as MJPEG. No ROI overlay here on purpose — ROI

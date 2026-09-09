@@ -77,6 +77,7 @@ process.
 | PATCH / DELETE | `/api/camera-slots/<id>` | PATCH sets `{camera_id}` and/or `{label}` on one added slot. DELETE removes it. There's no route to delete `DWELL_CAMERA_ID`/`POS_CAMERA_ID` — the floor of 2 is structural, not just a UI rule. |
 | POST | `/api/system/shutdown` | Stops this service's own process. Only affects VisionSync — other modules keep running. |
 | GET | `/api/health` | `{ status, nx_reachable }` — liveness + Nx connectivity check. |
+| GET | `/api/internal/resolve-camera?camera_id=<id>` | **Internal, service-to-service only** — `{id, name, rtsp_url}` with NX credentials embedded in `rtsp_url`. For a backend module (e.g. ROI_Polygon) that needs to open the real stream itself for processing, not for the browser. Same no-auth trust model as every other endpoint here — keep this port off untrusted networks. |
 
 Any other module (ROI/Dwell, Face Recognition, Local LLM, an N8N flow)
 should:
