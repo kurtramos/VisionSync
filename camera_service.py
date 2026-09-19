@@ -35,6 +35,8 @@ import signal
 import threading
 import time
 import uuid
+import hmac
+import secrets
 from urllib.parse import quote
 
 import requests
@@ -54,6 +56,68 @@ app = Flask(__name__)
 # API — the one holding the platform's single Nx Witness credential.
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# --- ACCESS TOKEN (same bootstrap as zone-director/scene-intelligence) ---
+# This module is also called server-to-server (Scene Intelligence's
+# camera_sync_loop polls /api/settings, /api/camera-slots, /api/cameras, and
+# /api/internal/resolve-camera — the one that hands back the Nx credential
+# embedded in an RTSP URL), not just from this module's own browser UI. That
+# caller authenticates with this same token via the VISIONSYNC_TOKEN env var
+# on its own side, not by reading this file off disk — keeps the two modules
+# talking only over HTTP, per this platform's module-boundary principle.
+AUTH_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_config.json")
+
+def ensure_auth_token_exists():
+    if os.path.exists(AUTH_CONFIG_FILE):
+        return
+    token = secrets.token_urlsafe(32)
+    fd = os.open(AUTH_CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"token": token}, f)
+    print("=" * 70)
+    print("[i] First run: generated this box's access token.")
+    print(f"[i] {AUTH_CONFIG_FILE}")
+    print(f"[i] Token: {token}")
+    print("[i] Paste this into the VisionSync UI when it prompts for an access")
+    print("[i] token, and set it as VISIONSYNC_TOKEN for any other module (e.g.")
+    print("[i] Scene Intelligence) that calls this service's API directly.")
+    print("=" * 70)
+
+def load_auth_token():
+    try:
+        with open(AUTH_CONFIG_FILE, "r") as f:
+            return (json.load(f).get("token") or "").strip()
+    except Exception as e:
+        print(f"[!] Could not read {AUTH_CONFIG_FILE}: {e}")
+        return ""
+
+ensure_auth_token_exists()
+
+def _request_is_authorized() -> bool:
+    expected = load_auth_token()
+    if not expected:
+        return False
+    header = request.headers.get("Authorization", "")
+    if header.startswith("Bearer ") and hmac.compare_digest(header[len("Bearer "):].strip(), expected):
+        return True
+    provided = request.args.get("token", "")
+    if provided and hmac.compare_digest(provided, expected):
+        return True
+    return False
+
+@app.before_request
+def require_auth():
+    # "/" and static assets (html/js/css/images, see serve_static_page's own
+    # extension allowlist) stay public so the page can load and show its own
+    # token prompt. Everything under /api is gated, including /api/stream —
+    # accepts a `?token=` query param too since the live-preview <img> tags
+    # can't send an Authorization header.
+    if request.path.startswith("/api/") and not _request_is_authorized():
+        return jsonify({"error": "Unauthorized. This box's access token is missing or incorrect."}), 401
+
+@app.route("/api/auth/check", methods=["GET"])
+def auth_check():
+    return jsonify({"ok": True})
 
 # --- NX WITNESS CONNECTION (the ONE credential this whole platform needs) ---
 # All of these come from the environment (.env, gitignored) — never hardcode

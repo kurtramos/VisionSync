@@ -54,7 +54,7 @@
             <div class="flex justify-between items-start mb-3">
                 <div>
                     <div class="text-sm font-semibold text-slate-200">Camera Views</div>
-                    <div class="text-[11px] sm:text-xs text-slate-400 mt-1 font-light">Nx cameras this project pulls live feeds from — Customer Dwell POV and POS Camera Feed are required; add more as a project needs them</div>
+                    <div class="text-[11px] sm:text-xs text-slate-400 mt-1 font-light">Nx cameras this project pulls live feeds from — Camera 1 and Camera 2 are required; add more as a project needs them</div>
                 </div>
                 <button onclick="refreshCameras()" title="Refresh camera list" class="text-slate-400 hover:text-cyan-400 transition-colors p-1.5 shrink-0">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -87,6 +87,21 @@
         </div>
     </div>
 
+    <div id="authPromptModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6">
+            <h3 class="text-sm font-bold tracking-wide text-white uppercase">Access Token Required</h3>
+            <p id="authPromptError" class="text-xs text-slate-400 mt-2"></p>
+            <p class="text-xs text-slate-500 mt-2">Contact your system administrator for the access token. Remembered on this browser after you enter it once.</p>
+            <input id="authTokenInput" type="password" placeholder="Paste access token…" autocomplete="off"
+                onkeydown="if(event.key==='Enter'){ submitAuthToken(); }"
+                class="w-full mt-4 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+            <button id="authPromptSubmitBtn" onclick="submitAuthToken()"
+                class="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition rounded-lg text-sm font-semibold text-white">
+                Continue
+            </button>
+        </div>
+    </div>
+
     <script>
         // Relative on purpose: this page is always served by camera_service.py
         // itself, so a relative path is always same-origin regardless of
@@ -96,6 +111,78 @@
         // and otherwise silently depended on the wildcard CORS grant below.
         const API = "/api";
         const STREAM_URL = "/api/stream";
+
+        // --- Access token (see camera_service.py's ensure_auth_token_exists()) ---
+        const AUTH_TOKEN_KEY = "visionsync_auth_token";
+        function getAuthToken() { try { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; } catch (e) { return ""; } }
+        function setAuthToken(token) { try { localStorage.setItem(AUTH_TOKEN_KEY, token); } catch (e) { console.warn("Could not save access token", e); } }
+
+        // For the live-preview <img> tags (STREAM_URL), which can't send an
+        // Authorization header — appended as a query param instead.
+        function withToken(url) {
+            if (!url) return url;
+            const token = getAuthToken();
+            if (!token) return url;
+            return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
+        }
+
+        const _nativeFetch = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+            const url = typeof input === "string" ? input : (input && input.url) || "";
+            if (url.startsWith(API)) {
+                const token = getAuthToken();
+                if (token) {
+                    init = Object.assign({}, init);
+                    init.headers = Object.assign({}, init.headers, { "Authorization": "Bearer " + token });
+                }
+            }
+            return _nativeFetch(input, init).then(res => {
+                if (res.status === 401) showAuthPrompt(getAuthToken()
+                    ? "That access token was rejected. Please verify it and re-enter it."
+                    : "Enter this box's access token to continue.");
+                return res;
+            });
+        };
+
+        let authPromptVisible = false;
+
+        function showAuthPrompt(message) {
+            document.getElementById("authPromptError").innerText = message || "";
+            document.getElementById("authPromptModal").classList.remove("hidden");
+            if (!authPromptVisible) document.getElementById("authTokenInput").focus();
+            authPromptVisible = true;
+        }
+
+        function hideAuthPrompt() {
+            document.getElementById("authPromptModal").classList.add("hidden");
+            authPromptVisible = false;
+        }
+
+        async function submitAuthToken() {
+            const input = document.getElementById("authTokenInput");
+            const token = (input.value || "").trim();
+            if (!token) return;
+            const btn = document.getElementById("authPromptSubmitBtn");
+            btn.disabled = true;
+            btn.innerText = "Checking…";
+            setAuthToken(token);
+            try {
+                const res = await fetch(`${API}/auth/check`);
+                if (!res.ok) {
+                    document.getElementById("authPromptError").innerText = "That token was rejected — please verify it and try again.";
+                    btn.disabled = false;
+                    btn.innerText = "Continue";
+                    return;
+                }
+                hideAuthPrompt();
+                fetchCameras();
+                refreshAllCards();
+            } catch (e) {
+                document.getElementById("authPromptError").innerText = "Could not reach this server to check the token — is it still running?";
+                btn.disabled = false;
+                btn.innerText = "Continue";
+            }
+        }
 
         // Every live camera view on the page — the first two (Dwell, POS) are
         // the floor and can never be removed; anything after that came from
@@ -117,8 +204,8 @@
                 const slots = await slotsRes.json();
 
                 cameraViews = [
-                    { key: 'DWELL_CAMERA_ID', label: 'Customer Dwell POV', removable: false, cameraId: settings.DWELL_CAMERA_ID || '' },
-                    { key: 'POS_CAMERA_ID', label: 'POS Camera Feed', removable: false, cameraId: settings.POS_CAMERA_ID || '' },
+                    { key: 'DWELL_CAMERA_ID', label: 'Camera 1', removable: false, cameraId: settings.DWELL_CAMERA_ID || '' },
+                    { key: 'POS_CAMERA_ID', label: 'Camera 2', removable: false, cameraId: settings.POS_CAMERA_ID || '' },
                     ...slots.map(s => ({ key: s.id, label: s.label, removable: true, cameraId: s.camera_id || '' }))
                 ];
 
@@ -242,7 +329,7 @@
             img.classList.remove('hidden');
             if (img.dataset.cameraId !== view.cameraId) {
                 img.dataset.cameraId = view.cameraId;
-                img.src = `${STREAM_URL}?camera_id=${view.cameraId}&t=${Date.now()}`;
+                img.src = withToken(`${STREAM_URL}?camera_id=${view.cameraId}&t=${Date.now()}`);
             }
         }
 
