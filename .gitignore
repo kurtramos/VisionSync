@@ -3,3 +3,9 @@ __pycache__/
 .env
 camera_settings.json
 venv/
+
+# Per-box access token, generated once at startup by
+# ensure_auth_token_exists() in camera_service.py. Never commit — whoever
+# holds it can use every action this API can, including resolving the
+# platform's one Nx Witness credential.
+auth_config.json
