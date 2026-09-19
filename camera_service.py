@@ -189,6 +189,35 @@ def get_camera(camera_id):
     return jsonify(data[clean_id]), 200
 
 
+@app.route("/api/internal/resolve-camera", methods=["GET"])
+def resolve_camera():
+    """Resolves a camera ID straight to a playable RTSP URL, for a module
+    running as a Python process on the same box (e.g. the ROI/Dwell
+    module's "visionsync" camera source) that can't just embed
+    /api/stream's MJPEG. Never holds an Nx credential itself — this is the
+    one place that does, per this module's ownership boundary.
+
+    Response: { id, name, rtsp_url }
+    """
+    camera_id = request.args.get("camera_id", "").strip("{}")
+    if not camera_id:
+        return jsonify({"status": "error", "message": "camera_id is required"}), 400
+
+    cameras, status = get_cameras()
+    if status != 200:
+        return cameras, status
+    data = cameras.get_json()
+    cam = data.get(camera_id)
+    if not cam:
+        return jsonify({"status": "error", "message": "Camera not found"}), 404
+
+    return jsonify({
+        "id": camera_id,
+        "name": cam.get("name"),
+        "rtsp_url": build_rtsp_url(camera_id),
+    }), 200
+
+
 # --- LIVE PREVIEW STREAM ---
 def generate_frames(camera_id: str):
     """Streams one Nx camera as MJPEG. No ROI overlay here on purpose — ROI
@@ -322,4 +351,8 @@ if __name__ == "__main__":
     # views open at once, every request after the first (a newly switched
     # camera included) queues behind whichever stream(s) are already open
     # and never renders.
-    app.run(port=port, debug=False, use_reloader=False, threaded=True)
+    #
+    # host 0.0.0.0 (not the Flask default of 127.0.0.1) since DEPLOY.md
+    # documents other modules/machines reaching this service over the LAN
+    # on this port.
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)
