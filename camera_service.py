@@ -40,7 +40,6 @@ from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, Response, send_from_directory
-from flask_cors import CORS
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 import urllib3
 import cv2
@@ -49,7 +48,10 @@ import json
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+# No CORS: index.html now calls its API via a relative path (API = "/api"),
+# so every real request is already same-origin. The previous wildcard grant
+# would let any third-party page a LAN user visits script calls against this
+# API — the one holding the platform's single Nx Witness credential.
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

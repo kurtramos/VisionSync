@@ -88,9 +88,14 @@
     </div>
 
     <script>
-        // Point this at wherever camera_service.py is actually running.
-        const API = "http://127.0.0.1:5010/api";
-        const STREAM_URL = "http://127.0.0.1:5010/api/stream";
+        // Relative on purpose: this page is always served by camera_service.py
+        // itself, so a relative path is always same-origin regardless of
+        // which hostname/IP was used to load it (127.0.0.1, localhost, or a
+        // LAN IP for viewing from another device) — unlike a hardcoded
+        // absolute URL, which only worked when loaded via that exact host
+        // and otherwise silently depended on the wildcard CORS grant below.
+        const API = "/api";
+        const STREAM_URL = "/api/stream";
 
         // Every live camera view on the page — the first two (Dwell, POS) are
         // the floor and can never be removed; anything after that came from
