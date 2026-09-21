@@ -66,6 +66,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # on its own side, not by reading this file off disk — keeps the two modules
 # talking only over HTTP, per this platform's module-boundary principle.
 AUTH_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_config.json")
+# See load_auth_token(): tokens generated from here on expire after this
+# many days rather than living forever. Tokens that predate this (no
+# issued_at recorded) are treated as non-expiring, not retroactively
+# invalidated by this update. Note this also affects Scene Intelligence's
+# VISIONSYNC_TOKEN — when this rotates, that env var needs the new value too.
+AUTH_TOKEN_TTL_DAYS = 30
 
 def ensure_auth_token_exists():
     if os.path.exists(AUTH_CONFIG_FILE):
@@ -73,20 +79,29 @@ def ensure_auth_token_exists():
     token = secrets.token_urlsafe(32)
     fd = os.open(AUTH_CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as f:
-        json.dump({"token": token}, f)
+        json.dump({"token": token, "issued_at": time.time()}, f)
     print("=" * 70)
     print("[i] First run: generated this box's access token.")
     print(f"[i] {AUTH_CONFIG_FILE}")
     print(f"[i] Token: {token}")
+    print(f"[i] Expires in {AUTH_TOKEN_TTL_DAYS} days — delete this file and")
+    print("[i] restart the service to mint a new one when it does.")
     print("[i] Paste this into the VisionSync UI when it prompts for an access")
     print("[i] token, and set it as VISIONSYNC_TOKEN for any other module (e.g.")
     print("[i] Scene Intelligence) that calls this service's API directly.")
     print("=" * 70)
 
 def load_auth_token():
+    """Returns "" (same as missing/unreadable) once the token is past
+    AUTH_TOKEN_TTL_DAYS old, so every caller gets the same fail-closed
+    behavior without needing its own expiry check."""
     try:
         with open(AUTH_CONFIG_FILE, "r") as f:
-            return (json.load(f).get("token") or "").strip()
+            data = json.load(f)
+        issued_at = data.get("issued_at")
+        if issued_at and (time.time() - issued_at) > AUTH_TOKEN_TTL_DAYS * 86400:
+            return ""
+        return (data.get("token") or "").strip()
     except Exception as e:
         print(f"[!] Could not read {AUTH_CONFIG_FILE}: {e}")
         return ""
