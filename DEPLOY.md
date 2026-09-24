@@ -53,10 +53,13 @@ site's Nx server. Don't guess or reuse another site's `.env`.
 python camera_service.py
 ```
 
-Watch the console for errors, then in another terminal (or a browser):
+Watch the console for errors, then in another terminal (every `/api/*`
+route, including health, needs the token generated into `auth_config.json`
+on first start):
 
 ```bash
-curl http://127.0.0.1:5010/api/health
+TOKEN=$(python3 -c "import json;print(json.load(open('auth_config.json'))['token'])")
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:5010/api/health
 # {"status":"ok","nx_reachable":true}   <- nx_reachable must be true
 ```
 
@@ -69,7 +72,7 @@ If `nx_reachable` is `false`:
 Then confirm cameras resolve:
 
 ```bash
-curl http://127.0.0.1:5010/api/cameras
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:5010/api/cameras
 ```
 
 Should return a JSON object keyed by camera ID. An empty `{}` with
@@ -91,9 +94,9 @@ Stop this test run (`Ctrl+C`) once confirmed.
 python camera_service.py
 ```
 Wrap this in whatever your platform uses to keep a process alive and
-restart it on crash/reboot — systemd unit, pm2, supervisor, a Docker
-container, etc. There's no bundled equivalent to the `.bat` scripts for
-non-Windows yet.
+restart it on crash/reboot. The Linux dev box uses a systemd user unit
+(`~/.config/systemd/user/visionsync.service`, `ExecStart=<this folder>/venv/bin/python camera_service.py`);
+it isn't committed to this repo yet.
 
 **Auto-start on Windows boot/login** (optional): place a shortcut to
 `Start_VisionSync_System.bat` in
@@ -119,11 +122,17 @@ Witness directly, and never construct RTSP URLs themselves. See
    **+ Add Camera** button in the UI — either way, other projects can then
    read those extra slots back from `/api/settings`.
 
+Every one of these calls needs VisionSync's access token (from this box's
+`auth_config.json`, created on first start): send
+`Authorization: Bearer <token>`, or `?token=<token>` for an `<img>` stream.
+Server-side callers keep it in their own `VISIONSYNC_TOKEN` env var.
+
 If the consuming project runs on a **different machine** than VisionSync,
 make sure port `5010` (or whatever `PORT` you set) is reachable from it —
-firewall rule, same LAN/VPN, etc. CORS is already open (`origins: "*"`) so
-browser-side cross-origin requests aren't the blocker; network reachability
-is.
+firewall rule, same LAN/VPN, etc. There is deliberately **no CORS** header:
+a web page on another origin can't call this API from the browser. Call it
+from that project's own backend instead (it holds the platform's Nx
+credential, so it shouldn't be browser-reachable cross-origin).
 
 ## 7. Known limitations / troubleshooting
 

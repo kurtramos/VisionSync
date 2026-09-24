@@ -1,5 +1,7 @@
 # VisionSync — Camera Configuration Module
 
+> Platform-wide picture and roadmap: [../PLATFORM_GUIDE.md](../PLATFORM_GUIDE.md). Note: this repo currently lives under a personal GitHub account (`kurtramos/VisionSync`); it should move to the company org alongside `zone-director` and `scene-intelligence`.
+
 Part of the **Sentivise.AI CCTV Intelligence Platform**. This is the
 **Camera Management** module: the single source of truth for Nx Witness
 camera identity and streams, described in Section 3.3 of the project
@@ -48,13 +50,15 @@ Other modules should resolve "camera X" → a live stream/status by calling
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # then fill in real Nx credentials (a real .env is
-                        # already included here, pre-filled from the current
-                        # FaceRecProject config, for a same-project handoff)
+cp .env.example .env   # then fill in this site's real Nx credentials
 python camera_service.py
 ```
 
-Defaults to `http://127.0.0.1:5010`. Open `/` for the VisionSync UI.
+Defaults to `http://127.0.0.1:5010`. Open `/` for the VisionSync UI. On the Linux dev box it runs as the systemd user service `visionsync.service` (from this folder's `venv/`).
+
+### Access token
+
+On first start `camera_service.py` generates `auth_config.json` (gitignored) with this box's token. Every `/api/*` route requires it, as `Authorization: Bearer <token>` or `?token=` (for the MJPEG `<img>` preview). Server-to-server callers (Scene Intelligence, StrangerWatcher) pass it through their own `VISIONSYNC_TOKEN` env var. Tokens expire after 30 days (`AUTH_TOKEN_TTL_DAYS`); delete the file and restart to rotate. There's no CORS header on purpose: the UI calls `/api` same-origin.
 
 On Windows, `Start_VisionSync_System.bat` (silent, `pythonw`) and
 `Start_Debug_VisionSync_System.bat` (visible console window, for
@@ -73,17 +77,18 @@ the tab — it only stops VisionSync's own process.
 | GET / POST | `/api/camera-slots` | GET lists additional camera views beyond the floor: `[{id, label, camera_id}, ...]`. POST adds a new one (auto-labelled `Camera 3`, `Camera 4`, ...) and returns it. |
 | PATCH / DELETE | `/api/camera-slots/<id>` | PATCH sets `{camera_id}` and/or `{label}` on one added slot. DELETE removes it. There's no route to delete `DWELL_CAMERA_ID`/`POS_CAMERA_ID` — the floor of 2 is structural, not just a UI rule. |
 | POST | `/api/system/shutdown` | Stops this service's own process. Only affects VisionSync — other modules keep running. |
+| GET | `/api/internal/resolve-camera` | Server-to-server only: resolves a camera id to its RTSP relay URL (with the Nx credential embedded) plus its raw device name. Used by Scene Intelligence and StrangerWatcher. Treat the response as a secret. |
 | GET | `/api/health` | `{ status, nx_reachable }` — liveness + Nx connectivity check. |
 
-Any other module (ROI/Dwell, Face Recognition, Local LLM, an N8N flow)
+All routes need the access token (see above). Any other module (Scene Intelligence, StrangerWatcher, Local LLM, an n8n flow)
 should:
 1. Call `GET /api/settings` to find out which camera ID it should be
    watching.
 2. Call `GET /api/cameras` (or `/api/cameras/<id>`) to check that camera is
    online, or to build its own camera picker.
 3. Never construct an RTSP URL or hold an Nx credential itself — either
-   consume `/api/stream`, or (if running as a Python process on the same
-   box) import `build_rtsp_url()` from `camera_service.py`.
+   consume `/api/stream`, or call `/api/internal/resolve-camera` for an
+   RTSP URL at connect time (never store it).
 
 ## Multi-server note
 
