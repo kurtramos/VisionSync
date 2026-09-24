@@ -2,7 +2,11 @@ __pycache__/
 *.pyc
 .env
 camera_settings.json
+camera_events.json
+camera_events.json.tmp
 venv/
+.venv/
+*.log
 
 # Per-box access token, generated once at startup by
 # ensure_auth_token_exists() in camera_service.py. Never commit — whoever

@@ -15,6 +15,9 @@ service on purpose):
   - Build Nx's RTSP relay URL for a given camera ID, so no other module
     needs to know a raw camera IP/RTSP path.
   - Serve a live MJPEG preview of any camera by ID.
+  - Monitor every camera's health (status, 24h recording coverage, streams,
+    uptime, Nx event log, server storage) and publish a notification feed
+    for disconnects/recoveries/login failures — see camera_health.py.
   - Persist which camera each *consuming* module currently points at
     (DWELL_CAMERA_ID / POS_CAMERA_ID for the POS-Dwell review panels, plus
     any number of additional project-specific camera slots — minimum 2,
@@ -46,6 +49,8 @@ from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 import urllib3
 import cv2
 import json
+
+from camera_health import CameraHealthMonitor
 
 load_dotenv()
 
@@ -215,6 +220,34 @@ _camera_cache = {"data": None, "fetched_at": 0}
 CAMERA_CACHE_TTL_SECONDS = 300
 
 
+def _shape_devices(devices):
+    result = {}
+    for d in devices:
+        clean_id = (d.get("id") or "").strip("{}")
+        if not clean_id:
+            continue
+        result[clean_id] = {
+            "id": clean_id,
+            "name": d.get("name"),
+            "mac": d.get("physicalId"),
+            "vendor": d.get("vendor"),
+            "model": d.get("model"),
+            "status": d.get("status"),  # e.g. "Online", "Recording", "Offline", "Unauthorized"
+            # Nx reports an actively-streaming/recording camera as "Recording", not
+            # "Online" — a straight `== "Online"` check misses those.
+            "online": d.get("status") in ("Online", "Recording"),
+        }
+    return result
+
+
+def _refresh_camera_cache(devices):
+    """Called by the health monitor after every device poll, so /api/cameras'
+    online flags are never staler than HEALTH_POLL_SECONDS even though the
+    cache itself lives for CAMERA_CACHE_TTL_SECONDS."""
+    _camera_cache["data"] = _shape_devices(devices)
+    _camera_cache["fetched_at"] = time.time()
+
+
 @app.route("/api/cameras", methods=["GET"])
 def get_cameras():
     """Resolves Nx camera identifiers (Camera ID + MAC/physicalId) so every
@@ -232,24 +265,7 @@ def get_cameras():
         res = _nx_request("GET", "/rest/v1/devices", params={"_with": "id,name,physicalId,vendor,model,status"})
         res.raise_for_status()
 
-        devices = res.json()
-        result = {}
-        for d in devices:
-            clean_id = (d.get("id") or "").strip("{}")
-            if not clean_id:
-                continue
-            result[clean_id] = {
-                "id": clean_id,
-                "name": d.get("name"),
-                "mac": d.get("physicalId"),
-                "vendor": d.get("vendor"),
-                "model": d.get("model"),
-                "status": d.get("status"),  # e.g. "Online", "Recording", "Offline", "Unauthorized"
-                # Nx reports an actively-streaming/recording camera as "Recording", not
-                # "Online" — a straight `== "Online"` check misses those.
-                "online": d.get("status") in ("Online", "Recording"),
-            }
-
+        result = _shape_devices(res.json())
         _camera_cache["data"] = result
         _camera_cache["fetched_at"] = now
         return jsonify(result), 200
@@ -411,6 +427,113 @@ def health():
     return jsonify({"status": "ok", "nx_reachable": nx_ok}), 200
 
 
+# --- CAMERA HEALTH & NOTIFICATIONS (see camera_health.py) ---
+# A background monitor polls Nx for device status, 24h recording archive,
+# Nx's own event log and server storage, and turns status transitions
+# (disconnected / back online / login failed / unstable) into a
+# notification feed. Other modules can poll /api/notifications?since=<seq>
+# the same way the VisionSync UI does, instead of watching Nx themselves.
+EVENTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_events.json")
+
+health_monitor = CameraHealthMonitor(
+    nx_request=_nx_request,
+    events_file=EVENTS_FILE,
+    poll_seconds=int(os.environ.get("HEALTH_POLL_SECONDS", "15")),
+    footage_seconds=int(os.environ.get("FOOTAGE_POLL_SECONDS", "120")),
+    on_devices=_refresh_camera_cache,
+)
+
+
+@app.route("/api/health/cameras", methods=["GET"])
+def cameras_health():
+    """Fleet-wide health: summary counts, one health record per camera
+    (score, grade, issues, streams, recording, uptime, ...), Nx servers and
+    storages, and which Nx endpoint generation served each data source."""
+    return jsonify(health_monitor.fleet_snapshot()), 200
+
+
+@app.route("/api/health/cameras/<camera_id>", methods=["GET"])
+def camera_health_details(camera_id):
+    """Everything known about one camera: its health record plus identity,
+    24h recording timeline, recent events, schedule tasks, and every Nx
+    device parameter/option (credentials stripped)."""
+    details = health_monitor.camera_details(camera_id.strip("{}"))
+    if details is None:
+        return jsonify({"status": "error", "message": "Camera not found (or not polled from Nx yet)"}), 404
+    return jsonify(details), 200
+
+
+@app.route("/api/notifications", methods=["GET"])
+def notifications():
+    """?since=<seq> returns only events newer than that sequence number —
+    poll with the previous response's latest_seq. Optional ?camera_id= and
+    ?limit= (default 200, max 1000)."""
+    try:
+        since = int(request.args.get("since", "0"))
+        limit = max(1, min(1000, int(request.args.get("limit", "200"))))
+    except ValueError:
+        return jsonify({"status": "error", "message": "since and limit must be integers"}), 400
+    camera_id = (request.args.get("camera_id") or "").strip("{}") or None
+    return jsonify(health_monitor.get_events(since_seq=since, limit=limit, camera_id=camera_id)), 200
+
+
+_thumbnail_cache = {}  # camera id -> (fetched_at, jpeg bytes or None, content type)
+THUMBNAIL_TTL_SECONDS = 30
+# RTSP fallback grabs are expensive (a full stream open per snapshot) — cap
+# how many run at once so a fleet grid of thumbnails can't swamp the box.
+_rtsp_grab_slots = threading.Semaphore(2)
+
+
+def _grab_rtsp_frame(camera_id):
+    if not _rtsp_grab_slots.acquire(timeout=8):
+        return None
+    try:
+        cap = cv2.VideoCapture(build_rtsp_url(camera_id), cv2.CAP_FFMPEG,
+                               [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
+        try:
+            ok, frame = cap.read()
+        finally:
+            cap.release()
+        if not ok:
+            return None
+        ok, buffer = cv2.imencode(".jpg", cv2.resize(frame, (480, 270)), [cv2.IMWRITE_JPEG_QUALITY, 80])
+        return buffer.tobytes() if ok else None
+    except Exception as e:
+        print(f"[!] RTSP snapshot failed for {camera_id}: {e}")
+        return None
+    finally:
+        _rtsp_grab_slots.release()
+
+
+@app.route("/api/cameras/<camera_id>/thumbnail", methods=["GET"])
+def camera_thumbnail(camera_id):
+    """A still snapshot of one camera — Nx's own server-rendered image when
+    the server offers one, else a single frame grabbed off the RTSP relay.
+    Lets the health grid show every camera without opening an MJPEG stream
+    per camera."""
+    cid = camera_id.strip("{}")
+    if cid not in health_monitor.devices:
+        return jsonify({"status": "error", "message": "Camera not found"}), 404
+
+    cached = _thumbnail_cache.get(cid)
+    if cached and time.time() - cached[0] < THUMBNAIL_TTL_SECONDS:
+        _, data, ctype = cached
+    else:
+        image = health_monitor.fetch_thumbnail(cid)
+        if image:
+            data, ctype = image
+        else:
+            online = health_monitor.devices.get(cid, {}).get("status") in ("Online", "Recording")
+            data, ctype = (_grab_rtsp_frame(cid) if online else None), "image/jpeg"
+        _thumbnail_cache[cid] = (time.time(), data, ctype)
+
+    if not data:
+        return jsonify({"status": "error", "message": "No snapshot available for this camera"}), 404
+    resp = Response(data, mimetype=ctype)
+    resp.headers["Cache-Control"] = f"private, max-age={THUMBNAIL_TTL_SECONDS}"
+    return resp
+
+
 # --- STATIC UI (VisionSync front end) ---
 _ALLOWED_STATIC_EXTENSIONS = {".html", ".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".ico"}
 
@@ -426,6 +549,19 @@ def serve_static_page(filename):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5010"))
+
+    # Windows lets a second process bind the same port without an error, and
+    # then requests land on either copy at random (and both health monitors
+    # write camera_events.json). Refuse to start a second instance instead.
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(1)
+        if probe.connect_ex(("127.0.0.1", port)) == 0:
+            print(f"[!] Something is already listening on port {port} — VisionSync is probably already running")
+            print(f"[!] (maybe hidden, via Start_VisionSync_System.bat). Open http://127.0.0.1:{port}/ or stop it first.")
+            raise SystemExit(1)
+
+    health_monitor.start()
     # threaded=True is required, not optional: every camera preview is a
     # long-lived MJPEG connection that never closes on its own. Without this,
     # Flask's dev server handles one request at a time, so with 2+ camera

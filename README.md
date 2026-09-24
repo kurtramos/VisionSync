@@ -19,6 +19,18 @@ handoff doc.
 - Building Nx's RTSP relay URL for a given camera ID, so nothing downstream
   needs a raw camera IP or per-camera password.
 - A live MJPEG preview stream for any camera by ID.
+- **Camera health & notifications** (`camera_health.py`): a background monitor
+  that polls Nx every 15s and turns it into a per-camera 0–100 health score
+  with reasons — status, 24h recording coverage vs. schedule, actual vs.
+  configured fps/bitrate, uptime and disconnect history, firmware/IP/MAC,
+  capabilities and every raw Nx device parameter (credentials stripped) —
+  plus a notification feed: camera disconnected / back online / login
+  failed / unstable / added / removed, Nx server unreachable, storage
+  offline, and health-relevant entries from Nx's own event log. Disconnect
+  alerts come from VisionSync's own status tracking, so they work on every
+  Nx version; each Nx endpoint is tried modern-first (`/rest/v4`→`v3`→`v2`)
+  with legacy fallbacks, and the UI footer shows which data sources this
+  Nx server actually provides.
 - Persisting **which camera each consuming module currently points at**:
   `DWELL_CAMERA_ID` / `POS_CAMERA_ID` for the POS-Dwell review panels (the
   floor — always present, never removable), plus any number of additional
@@ -79,6 +91,10 @@ the tab — it only stops VisionSync's own process.
 | POST | `/api/system/shutdown` | Stops this service's own process. Only affects VisionSync — other modules keep running. |
 | GET | `/api/internal/resolve-camera` | Server-to-server only: resolves a camera id to its RTSP relay URL (with the Nx credential embedded) plus its raw device name. Used by Scene Intelligence and StrangerWatcher. Treat the response as a secret. |
 | GET | `/api/health` | `{ status, nx_reachable }` — liveness + Nx connectivity check. |
+| GET | `/api/health/cameras` | Fleet health: `{ summary, cameras: [{id, name, status, online, score, grade, issues, streams, recording, uptime_pct, disconnects_24h, firmware, ip, mac, capabilities, ...}], servers, storages, monitor }`. Served from the monitor's snapshot — cheap to poll. |
+| GET | `/api/health/cameras/<id>` | One camera's full health record plus identity, 24h recording timeline, recent events, schedule tasks, and every Nx device parameter/option (credentials stripped). |
+| GET | `/api/notifications?since=<seq>` | Camera/Nx events newer than `seq`: `{ events: [{seq, ts, severity, type, title, message, camera_id, camera_name, source}], latest_seq }`. Poll with the last `latest_seq`. Optional `camera_id`, `limit`. `severity` is `critical`/`warning`/`info`/`success`; `type` is e.g. `camera-offline`, `camera-online`, `camera-problem`, `camera-unstable`, `nx-unreachable`, `storage-offline`, `nx-networkissue`. |
+| GET | `/api/cameras/<id>/thumbnail` | JPEG snapshot (Nx-rendered, or one frame off the RTSP relay as fallback), cached 30s. |
 
 All routes need the access token (see above). Any other module (Scene Intelligence, StrangerWatcher, Local LLM, an n8n flow)
 should:
@@ -86,7 +102,9 @@ should:
    watching.
 2. Call `GET /api/cameras` (or `/api/cameras/<id>`) to check that camera is
    online, or to build its own camera picker.
-3. Never construct an RTSP URL or hold an Nx credential itself — either
+3. For alerting (n8n, Scene Intelligence, ...), poll `GET /api/notifications?since=<seq>`
+   instead of watching Nx's event log yourself.
+4. Never construct an RTSP URL or hold an Nx credential itself — either
    consume `/api/stream`, or call `/api/internal/resolve-camera` for an
    RTSP URL at connect time (never store it).
 

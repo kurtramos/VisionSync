@@ -42,6 +42,7 @@ Then edit `.env` and fill in the real values for **this** site:
 | `NX_USERNAME` / `NX_PASSWORD` | The one Nx Witness Server login for this site. |
 | `NX_RTSP_HOST` / `NX_RTSP_PORT` | Nx's own RTSP relay host/port — **not** a camera's IP. This is usually the Nx Server's LAN IP and its RTSP port (default `7001`). |
 | `PORT` | Which port `camera_service.py` listens on. Defaults to `5010` — only change this if something else on the box already uses it. |
+| `HEALTH_POLL_SECONDS` / `FOOTAGE_POLL_SECONDS` | Optional. How often the camera-health monitor polls Nx for device status (default `15`) and for each camera's 24h recording archive (default `120`). Lower = faster disconnect alerts, more load on Nx. |
 
 **Where to find these for a new site:** open Nx Witness Desktop Client →
 Server Settings for the values above, or ask whoever administers that
@@ -154,6 +155,7 @@ credential, so it shouldn't be browser-reachable cross-origin).
   Windows: `netstat -ano | findstr :5010` to find the PID, then
   `taskkill /PID <pid> /F` — or just use the UI's Terminate System button
   next time instead of closing the console window directly.
+- **`camera_events.json` is gitignored too** — it's this box's camera notification history (last 1000 events), written by the health monitor. Delete it to start the feed fresh.
 - **`camera_settings.json` is gitignored on purpose** — it's per-machine
   state (which cameras are picked on *this* box), not something to commit
   or copy between sites.

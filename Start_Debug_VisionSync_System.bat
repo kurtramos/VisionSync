@@ -9,9 +9,11 @@ cd /d "%~dp0"
 echo Starting Camera Service (camera_service.py)...
 start "VisionSync Camera Service (Debug)" python camera_service.py
 
-:: Wait 2 seconds, then open the config dashboard
+:: Wait 4 seconds, then open the config dashboard
 echo Opening Config Dashboard...
-timeout /t 2 /nobreak > NUL
-start index.html
+timeout /t 4 /nobreak > NUL
+:: Open it through the service itself (not the file on disk) — the page calls
+:: its API at relative /api URLs, which only resolve when served over http.
+start http://127.0.0.1:5010/
 
 exit

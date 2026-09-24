@@ -25,6 +25,16 @@
             }
         }
     </script>
+    <style>
+        .vs-scroll::-webkit-scrollbar { width: 8px; }
+        .vs-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }
+        .vs-scroll::-webkit-scrollbar-track { background: transparent; }
+        @keyframes vs-slide-in { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .vs-alert-in { animation: vs-slide-in .35s cubic-bezier(.2,.9,.3,1.2); }
+        @keyframes vs-ring { 0%,100% { transform: rotate(0); } 15% { transform: rotate(14deg); } 30% { transform: rotate(-12deg); } 45% { transform: rotate(8deg); } 60% { transform: rotate(-4deg); } }
+        .vs-bell-ring { animation: vs-ring .9s ease-in-out; transform-origin: top center; }
+        .health-row img { transition: opacity .3s; }
+    </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4 sm:p-8 relative overflow-hidden">
 
@@ -36,17 +46,52 @@
         <span id="toast-text">SAVED</span>
     </div>
 
-    <div class="relative z-10 w-full max-w-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-3xl p-6 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] h-[95vh] overflow-y-auto">
+    <div class="vs-scroll relative z-10 w-full min-w-0 max-w-6xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-3xl p-4 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] h-[95vh] overflow-y-auto">
 
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sticky top-0 bg-slate-950/20 backdrop-blur-md p-2 rounded-xl z-20">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">VisionSync</h1>
                 <div class="text-xs text-slate-400 font-light">Camera Configuration — by Sentivise.AI</div>
             </div>
-            <div id="status-badge" class="flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-bold tracking-wider uppercase transition-all duration-300">
-                <div id="status-dot" class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,1)] transition-colors duration-300"></div>
-                <span id="status-text" class="text-slate-300">Checking Nx...</span>
+            <div class="flex items-center gap-2">
+                <button id="notif-bell" onclick="toggleNotifPanel(true)" title="Camera notifications" class="relative p-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 transition-all duration-300">
+                    <svg id="notif-bell-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    <span id="notif-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_12px_rgba(244,63,94,0.8)]">0</span>
+                </button>
+                <div id="status-badge" class="flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-bold tracking-wider uppercase transition-all duration-300">
+                    <div id="status-dot" class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,1)] transition-colors duration-300"></div>
+                    <span id="status-text" class="text-slate-300">Checking Nx...</span>
+                </div>
             </div>
+        </div>
+
+        <!-- Camera Health (fed by camera_health.py's background Nx monitor) -->
+        <div class="pt-4 border-t border-white/5 mb-8">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-4">
+                <div>
+                    <div class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        Camera Health
+                        <span class="flex items-center gap-1 text-[9px] font-bold tracking-widest text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>LIVE
+                        </span>
+                    </div>
+                    <div id="health-subtitle" class="text-[11px] sm:text-xs text-slate-400 mt-1 font-light">Live status, recording and reliability of every camera on Nx</div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <input id="health-search" oninput="renderHealthList()" placeholder="Search name, IP, model…" autocomplete="off"
+                        class="flex-1 lg:flex-none lg:w-52 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50">
+                    <div id="health-filters" class="flex rounded-lg border border-white/10 overflow-hidden text-[11px] font-semibold">
+                        <button data-filter="all" onclick="setHealthFilter('all')" class="px-3 py-1.5 transition">All</button>
+                        <button data-filter="attention" onclick="setHealthFilter('attention')" class="px-3 py-1.5 border-l border-white/10 transition">Needs attention</button>
+                        <button data-filter="offline" onclick="setHealthFilter('offline')" class="px-3 py-1.5 border-l border-white/10 transition">Offline</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fleet-tiles" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4"></div>
+            <div id="health-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            <div id="fleet-infra" class="mt-4"></div>
+            <div id="health-sources" class="text-[10px] text-slate-500 mt-3 font-mono leading-relaxed"></div>
         </div>
 
         <!-- Camera Views -->
@@ -61,7 +106,7 @@
                 </button>
             </div>
 
-            <div id="camera-views-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div id="camera-views-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- camera view cards injected by renderCameraViews() -->
             </div>
 
@@ -87,7 +132,52 @@
         </div>
     </div>
 
-    <div id="authPromptModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <!-- Slide-over: one camera's full Nx health/details -->
+    <div id="drawer-backdrop" onclick="closeDrawers()" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"></div>
+    <aside id="camera-drawer" class="vs-scroll fixed top-0 right-0 h-full w-full sm:w-[560px] bg-slate-950/95 backdrop-blur-2xl border-l border-white/10 z-50 translate-x-full transition-transform duration-300 ease-out overflow-y-auto shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
+        <div class="p-5 sm:p-6">
+            <div id="drawer-header"></div>
+            <div class="relative mt-4 aspect-video bg-black rounded-xl overflow-hidden border border-white/10 flex items-center justify-center">
+                <div id="drawer-img-empty" class="text-slate-600 font-mono text-[11px] flex flex-col items-center gap-1"></div>
+                <img id="drawer-img" class="hidden absolute inset-0 w-full h-full object-contain" alt="Camera snapshot">
+                <span id="drawer-live-badge" class="hidden absolute top-2 left-2 text-[10px] font-bold tracking-widest bg-rose-600 text-white rounded px-2 py-0.5 animate-pulse">● LIVE</span>
+                <div class="absolute bottom-2 right-2 flex gap-2">
+                    <button onclick="refreshDrawerSnapshot()" class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 hover:border-cyan-400/50 hover:text-cyan-300 transition">Snapshot</button>
+                    <button id="drawer-live-btn" onclick="toggleDrawerLive()" class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 hover:border-cyan-400/50 hover:text-cyan-300 transition">▶ Live view</button>
+                </div>
+            </div>
+            <div id="drawer-content"></div>
+        </div>
+    </aside>
+
+    <!-- Slide-over: notification feed -->
+    <aside id="notif-panel" class="fixed top-0 right-0 h-full w-full sm:w-[440px] bg-slate-950/95 backdrop-blur-2xl border-l border-white/10 z-50 translate-x-full transition-transform duration-300 ease-out flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
+        <div class="p-5 border-b border-white/5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-base font-bold text-white">Notifications</div>
+                    <div class="text-[11px] text-slate-500">Camera disconnects, recovery, login failures & Nx server events</div>
+                </div>
+                <button onclick="closeDrawers()" class="text-slate-500 hover:text-white text-lg px-2" title="Close">✕</button>
+            </div>
+            <div id="notif-filters" class="flex gap-1.5 mt-4 text-[11px] font-semibold">
+                <button data-filter="all" onclick="setNotifFilter('all')" class="px-3 py-1 rounded-full border transition">All</button>
+                <button data-filter="critical" onclick="setNotifFilter('critical')" class="px-3 py-1 rounded-full border transition">Critical</button>
+                <button data-filter="warning" onclick="setNotifFilter('warning')" class="px-3 py-1 rounded-full border transition">Warnings</button>
+                <button data-filter="recovery" onclick="setNotifFilter('recovery')" class="px-3 py-1 rounded-full border transition">Recoveries</button>
+            </div>
+            <div class="flex items-center gap-4 mt-3 text-[11px] text-slate-400">
+                <label class="flex items-center gap-1.5 cursor-pointer select-none"><input id="pref-desktop" type="checkbox" onchange="setNotifPref('desktop', this.checked)" class="accent-cyan-500"> Desktop alerts</label>
+                <label class="flex items-center gap-1.5 cursor-pointer select-none"><input id="pref-sound" type="checkbox" onchange="setNotifPref('sound', this.checked)" class="accent-cyan-500"> Sound on critical</label>
+            </div>
+        </div>
+        <div id="notif-list" class="vs-scroll flex-1 overflow-y-auto p-4 space-y-2"></div>
+    </aside>
+
+    <!-- Pop-up alerts for brand-new events -->
+    <div id="alert-stack" class="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 w-[360px] max-w-[calc(100vw-2rem)] pointer-events-none"></div>
+
+    <div id="authPromptModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
         <div class="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6">
             <h3 class="text-sm font-bold tracking-wide text-white uppercase">Access Token Required</h3>
             <p id="authPromptError" class="text-xs text-slate-400 mt-2"></p>
@@ -177,6 +267,8 @@
                 hideAuthPrompt();
                 fetchCameras();
                 refreshAllCards();
+                fetchHealth();
+                fetchNotifications();
             } catch (e) {
                 document.getElementById("authPromptError").innerText = "Could not reach this server to check the token — is it still running?";
                 btn.disabled = false;
@@ -240,9 +332,9 @@
 
         function cardHTML(view) {
             return `
-            <div class="camera-card" data-key="${view.key}">
+            <div class="camera-card" data-key="${esc(view.key)}">
                 <div class="flex items-center justify-between mb-2">
-                    <label class="text-xs text-slate-400 block">${view.label}</label>
+                    <label class="text-xs text-slate-400 block">${esc(view.label)}</label>
                     ${view.removable ? `<button onclick="removeCameraSlot('${view.key}')" title="Remove this camera" class="text-slate-500 hover:text-rose-400 transition-colors text-xs px-1">✕</button>` : ''}
                 </div>
                 <div class="mb-2 rounded-xl overflow-hidden border border-white/10 relative bg-black aspect-video flex items-center justify-center">
@@ -255,6 +347,8 @@
                 <select data-role="select" onchange="handleCameraChange('${view.key}', ${view.removable})" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50">
                     <option value="">Loading cameras...</option>
                 </select>
+                <button data-role="health" onclick="openCameraDrawer(this.dataset.cameraId)" title="Open camera health"
+                    class="hidden mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 text-[11px] text-slate-400 text-left transition"></button>
             </div>`;
         }
 
@@ -282,6 +376,7 @@
                 if (!card) return;
                 populateSelectForCard(card, view);
                 updatePreviewForCard(card, view);
+                updateCardHealth(card, view);
             });
         }
 
@@ -306,7 +401,7 @@
                 const label = `${cam.name || cam.id} ${cam.online ? '● Online' : '○ Offline'}`;
                 const selected = cam.id === view.cameraId ? 'selected' : '';
                 const color = cam.online ? '#34d399' : '#f43f5e';
-                return `<option value="${cam.id}" ${selected} style="color:${color};background-color:#0f172a">${label}</option>`;
+                return `<option value="${esc(cam.id)}" ${selected} style="color:${color};background-color:#0f172a">${esc(label)}</option>`;
             }).join('');
         }
 
@@ -375,6 +470,7 @@
             const view = cameraViews.find(v => v.key === key);
             view.cameraId = newId;
             updatePreviewForCard(card, view);
+            updateCardHealth(card, view);
 
             try {
                 const res = removable
@@ -490,9 +586,697 @@
             setTimeout(() => t.classList.add('-translate-y-[150%]'), 3000);
         }
 
+        // =====================================================================
+        // CAMERA HEALTH — fed by GET /api/health/cameras (camera_health.py's
+        // background Nx monitor). Everything below renders keyed, in place,
+        // for the same reason as the camera cards above: a periodic poll
+        // must never tear down an <img> that's already showing something.
+        // =====================================================================
+        function esc(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function fmtAgo(ms) {
+            if (!ms) return '—';
+            const s = Math.round((Date.now() - ms) / 1000);
+            if (s < 5) return 'just now';
+            if (s < 60) return `${s}s ago`;
+            if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+            if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ago`;
+            return `${Math.floor(s / 86400)}d ago`;
+        }
+        function fmtDur(sec) {
+            if (sec == null) return '—';
+            sec = Math.max(0, Math.round(sec));
+            if (sec < 60) return `${sec}s`;
+            if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+            if (sec < 172800) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+            return `${Math.floor(sec / 86400)}d ${Math.floor((sec % 86400) / 3600)}h`;
+        }
+        function fmtBytes(n) {
+            if (n == null) return '—';
+            const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let i = 0;
+            while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+            return `${n.toFixed(n >= 100 || i === 0 ? 0 : 1)} ${u[i]}`;
+        }
+        function fmtPct(x, digits = 1) { return x == null ? '—' : `${(x * 100).toFixed(digits)}%`; }
+        function fmtTime(ms) { return ms ? new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'; }
+
+        const GRADES = {
+            healthy:  { label: 'Healthy',  color: '#34d399', text: 'text-emerald-300' },
+            fair:     { label: 'Fair',     color: '#facc15', text: 'text-yellow-300' },
+            degraded: { label: 'Degraded', color: '#fb923c', text: 'text-orange-300' },
+            critical: { label: 'Critical', color: '#f43f5e', text: 'text-rose-300' },
+            offline:  { label: 'Offline',  color: '#f43f5e', text: 'text-rose-300' },
+        };
+        const SEV = {
+            critical: { color: '#f43f5e', cls: 'border-rose-500/25 bg-rose-500/[0.06]', text: 'text-rose-300',
+                        icon: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z' },
+            warning:  { color: '#f59e0b', cls: 'border-amber-500/25 bg-amber-500/[0.05]', text: 'text-amber-300',
+                        icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+            info:     { color: '#38bdf8', cls: 'border-sky-500/20 bg-sky-500/[0.04]', text: 'text-sky-300',
+                        icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+            success:  { color: '#34d399', cls: 'border-emerald-500/20 bg-emerald-500/[0.04]', text: 'text-emerald-300',
+                        icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+        };
+        const CAMERA_ICON = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`;
+
+        function sevIcon(sev, size = 'w-4 h-4') {
+            const s = SEV[sev] || SEV.info;
+            return `<svg class="${size} shrink-0" fill="none" stroke="${s.color}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${s.icon}"></path></svg>`;
+        }
+
+        function scoreRing(score, grade, size = 44) {
+            const g = GRADES[grade] || GRADES.fair;
+            const r = 18, c = 2 * Math.PI * r, p = Math.max(0, Math.min(100, score ?? 0)) / 100;
+            return `<svg width="${size}" height="${size}" viewBox="0 0 44 44" class="shrink-0" role="img" aria-label="Health score ${score}">
+                <circle cx="22" cy="22" r="${r}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="4"></circle>
+                <circle cx="22" cy="22" r="${r}" fill="none" stroke="${g.color}" stroke-width="4" stroke-linecap="round"
+                    stroke-dasharray="${(c * p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 22 22)" style="filter:drop-shadow(0 0 4px ${g.color}66)"></circle>
+                <text x="22" y="26.5" text-anchor="middle" font-size="12" font-weight="700" fill="${g.color}" font-family="Inter,sans-serif">${score ?? '–'}</text>
+            </svg>`;
+        }
+
+        function statusPill(status) {
+            const map = {
+                Recording:    ['border-emerald-500/30 bg-emerald-500/10 text-emerald-300', '<span class="text-rose-400">●</span> Recording'],
+                Online:       ['border-emerald-500/30 bg-emerald-500/10 text-emerald-300', '● Online'],
+                Offline:      ['border-rose-500/30 bg-rose-500/10 text-rose-300', '○ Offline'],
+                Unauthorized: ['border-amber-500/30 bg-amber-500/10 text-amber-300', '⚠ Login failed'],
+            };
+            const [cls, label] = map[status] || ['border-slate-500/30 bg-slate-500/10 text-slate-300', esc(status || 'Unknown')];
+            return `<span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 whitespace-nowrap ${cls}">${label}</span>`;
+        }
+
+        function chip(text, cls = 'text-slate-300') {
+            return `<span class="inline-flex items-center text-[10px] font-medium bg-white/[0.04] border border-white/[0.06] rounded-md px-1.5 py-0.5 whitespace-nowrap ${cls}">${text}</span>`;
+        }
+
+        function streamLabel(s) {
+            if (!s) return null;
+            const fps = s.actual_fps ?? s.fps;
+            return [s.resolution, fps != null ? `${Math.round(fps)} fps` : null].filter(Boolean).join(' @ ');
+        }
+
+        let healthSnapshot = null;
+        let healthById = {};
+        let healthFilter = 'all';
+
+        async function fetchHealth() {
+            try {
+                const res = await fetch(`${API}/health/cameras`);
+                if (!res.ok) return;
+                healthSnapshot = await res.json();
+                healthById = {};
+                healthSnapshot.cameras.forEach(c => { healthById[c.id] = c; });
+                renderFleet();
+                cameraViews.forEach(view => { const card = cardFor(view.key); if (card) updateCardHealth(card, view); });
+            } catch (e) { console.error("Health fetch error:", e); }
+        }
+
+        function setHealthFilter(f) { healthFilter = f; renderHealthList(); }
+
+        function renderFleet() {
+            const snap = healthSnapshot;
+            const s = snap.summary, m = snap.monitor, sys = snap.system || {};
+            const avgGrade = s.avg_score == null ? 'fair' : s.avg_score >= 90 ? 'healthy' : s.avg_score >= 70 ? 'fair' : s.avg_score >= 40 ? 'degraded' : 'critical';
+            const tile = (label, value, sub, color = 'text-white', onclick = '') => `
+                <div ${onclick ? `onclick="${onclick}"` : ''} class="rounded-2xl border border-white/10 bg-white/[0.03] p-3 ${onclick ? 'cursor-pointer hover:border-cyan-500/30 hover:bg-white/[0.05] transition' : ''}">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${label}</div>
+                    <div class="text-2xl font-bold mt-1 ${color}">${value}</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 truncate">${sub}</div>
+                </div>`;
+            document.getElementById('fleet-tiles').innerHTML = [
+                tile('Cameras', s.total, esc([sys.name, sys.version ? `Nx v${sys.version}` : null].filter(Boolean).join(' · ') || 'on Nx Witness')),
+                tile('Online', `${s.online}<span class="text-sm text-slate-500 font-medium">/${s.total}</span>`, s.total ? `${Math.round(s.online / s.total * 100)}% of fleet reachable` : '—', 'text-emerald-300'),
+                tile('Down', s.offline, s.offline ? 'offline or login failed' : 'every camera is up', s.offline ? 'text-rose-400' : 'text-slate-300', s.offline ? "setHealthFilter('offline')" : ''),
+                tile('Recording', s.recording, 'writing to archive now', 'text-sky-300'),
+                tile('Fleet health', s.avg_score ?? '—', `${s.needs_attention} camera${s.needs_attention === 1 ? '' : 's'} need attention`, GRADES[avgGrade].text, s.needs_attention ? "setHealthFilter('attention')" : ''),
+                tile('Alerts · 24h', `<span class="text-rose-400">${s.critical_24h}</span><span class="text-slate-600 text-lg"> / </span><span class="text-amber-300">${s.warnings_24h}</span>`, 'critical / warnings — open feed', 'text-white', 'toggleNotifPanel(true)'),
+            ].join('');
+
+            const sub = document.getElementById('health-subtitle');
+            if (m.nx_reachable === false) sub.innerHTML = `<span class="text-rose-400">Nx unreachable</span> — ${esc(m.last_error || '')}`;
+            else if (m.last_poll_ms) sub.innerText = `Live status, recording and reliability of every camera on Nx · updated ${fmtAgo(m.last_poll_ms)} · polling every ${m.poll_seconds}s`;
+            else sub.innerText = 'Connecting to Nx…';
+
+            document.querySelectorAll('#health-filters [data-filter]').forEach(b => {
+                const on = b.dataset.filter === healthFilter;
+                b.className = `px-3 py-1.5 transition ${b.dataset.filter !== 'all' ? 'border-l border-white/10 ' : ''}${on ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`;
+            });
+
+            renderHealthList();
+            renderInfra();
+
+            const src = m.sources || {};
+            const label = { devices: 'Devices', footage: 'Recording archive', event_log: 'Nx event log', servers: 'Servers', storages: 'Storage', thumbnails: 'Snapshots' };
+            document.getElementById('health-sources').innerHTML = 'Nx data sources: ' + Object.keys(label).map(k =>
+                src[k] ? `<span class="text-emerald-400/80" title="${esc(src[k])}">✓ ${label[k]}</span>`
+                : src[k] === null ? `<span class="text-slate-600" title="This Nx server doesn't expose it — VisionSync keeps working without it">✗ ${label[k]}</span>`
+                : `<span class="text-slate-600">… ${label[k]}</span>`).join(' · ');
+        }
+
+        function filteredHealthCameras() {
+            const q = (document.getElementById('health-search').value || '').trim().toLowerCase();
+            const rank = c => (c.online ? 1 : 0);
+            return healthSnapshot.cameras
+                .filter(c => healthFilter === 'all' || (healthFilter === 'offline' ? !c.online : c.issues.length > 0))
+                .filter(c => !q || [c.name, c.ip, c.mac, c.model, c.vendor, c.id, c.firmware].some(v => (v || '').toLowerCase().includes(q)))
+                .sort((a, b) => rank(a) - rank(b) || a.score - b.score || (a.name || '').localeCompare(b.name || ''));
+        }
+
+        function healthInfoHTML(c) {
+            const g = GRADES[c.grade] || GRADES.fair;
+            const rec = c.recording || {};
+            const primary = c.streams && c.streams[0];
+            const chips = [
+                c.online && primary && streamLabel(primary) ? chip(esc(streamLabel(primary))) : null,
+                rec.coverage_24h != null ? chip(`24h rec ${fmtPct(rec.coverage_24h)}`, rec.coverage_24h < 0.9 && rec.continuous_fraction >= 0.95 ? 'text-amber-300' : 'text-slate-300') : null,
+                !rec.enabled ? chip('Recording off', 'text-amber-300') : null,
+                c.uptime_pct != null ? chip(`Uptime ${c.uptime_pct}%`) : null,
+                c.disconnects_24h ? chip(`${c.disconnects_24h}× drops 24h`, 'text-rose-300') : null,
+            ].filter(Boolean).join('');
+            const issues = c.issues.slice(0, 2).map(i =>
+                `<div class="flex items-start gap-1.5 text-[11px] ${SEV[i.severity]?.text || 'text-slate-400'} leading-snug">${sevIcon(i.severity, 'w-3.5 h-3.5 mt-px')}<span class="line-clamp-2">${esc(i.text)}</span></div>`).join('');
+            return `
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-sm font-semibold text-slate-100 truncate" title="${esc(c.name)}">${esc(c.name || c.id)}</div>
+                        <div class="text-[11px] text-slate-500 truncate">${esc([c.vendor, c.model].filter(Boolean).join(' ') || 'Unknown model')}${c.ip ? ` · <span class="font-mono">${esc(c.ip)}</span>` : ''}</div>
+                    </div>
+                    <div class="flex flex-col items-center -mt-0.5">${scoreRing(c.score, c.grade, 40)}<span class="text-[9px] font-bold uppercase tracking-wider ${g.text}">${g.label}</span></div>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap mt-1">${statusPill(c.status)}${chips}</div>
+                ${issues ? `<div class="mt-2 space-y-1">${issues}</div>` : `<div class="mt-2 text-[11px] text-emerald-400/80">✓ No issues detected</div>`}`;
+        }
+
+        let thumbBucket = 0;
+        function thumbUrl(id, bust) { return withToken(`${API}/cameras/${encodeURIComponent(id)}/thumbnail?b=${bust}`); }
+
+        // Swaps a thumbnail in only once the new image has fully loaded, so
+        // a slow/failed snapshot never blanks one that's already showing.
+        function loadThumb(img, id, bust) {
+            if (img.dataset.bust === String(bust)) return;
+            img.dataset.bust = String(bust);
+            const probe = new Image();
+            probe.onload = () => { img.src = probe.src; img.classList.remove('opacity-0'); };
+            probe.src = thumbUrl(id, bust);
+        }
+
+        function renderHealthList() {
+            if (!healthSnapshot) return;
+            const list = document.getElementById('health-list');
+            const cams = filteredHealthCameras();
+            const bust = Math.floor(Date.now() / 60000);
+            const wanted = new Set(cams.map(c => c.id));
+            list.querySelectorAll('.health-row').forEach(row => { if (!wanted.has(row.dataset.id)) row.remove(); });
+            list.querySelectorAll('[data-role="health-empty"]').forEach(el => el.remove());
+
+            cams.forEach(c => {
+                let row = list.querySelector(`.health-row[data-id="${CSS.escape(c.id)}"]`);
+                if (!row) {
+                    row = document.createElement('div');
+                    row.className = 'health-row rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-cyan-500/30 transition cursor-pointer p-3 flex gap-3';
+                    row.dataset.id = c.id;
+                    row.onclick = () => openCameraDrawer(c.id);
+                    row.innerHTML = `
+                        <div class="relative w-28 sm:w-32 shrink-0 aspect-video rounded-lg overflow-hidden bg-black border border-white/10 flex items-center justify-center text-slate-700 self-start">
+                            ${CAMERA_ICON}
+                            <img data-role="thumb" class="opacity-0 absolute inset-0 w-full h-full object-cover" alt="">
+                            <div data-role="thumb-overlay" class="absolute inset-x-0 bottom-0 px-1.5 py-0.5 text-[9px] font-bold tracking-wider"></div>
+                        </div>
+                        <div data-role="info" class="min-w-0 flex-1"></div>`;
+                }
+                row.querySelector('[data-role="info"]').innerHTML = healthInfoHTML(c);
+                const img = row.querySelector('[data-role="thumb"]');
+                img.style.filter = c.online ? '' : 'grayscale(1) brightness(0.45)';
+                // Offline cameras keep whatever frame they last had instead of re-polling.
+                if (c.online || !img.dataset.bust) loadThumb(img, c.id, bust);
+                const overlay = row.querySelector('[data-role="thumb-overlay"]');
+                overlay.className = `absolute inset-x-0 bottom-0 px-1.5 py-0.5 text-[9px] font-bold tracking-wider ${c.online ? (c.recording?.recording_now ? 'bg-gradient-to-t from-black/80 text-rose-300' : 'bg-gradient-to-t from-black/80 text-slate-300') : 'bg-rose-600/80 text-white'}`;
+                overlay.innerText = !c.online ? `${c.status === 'Offline' ? 'OFFLINE' : 'DOWN'} ${c.status_since_ms ? fmtAgo(c.status_since_ms).replace(' ago', '') : ''}` : (c.recording?.recording_now ? '● REC' : 'LIVE');
+                list.appendChild(row);
+            });
+
+            if (!cams.length) {
+                const m = healthSnapshot.monitor;
+                const msg = m.nx_reachable === false ? 'Nx Witness is unreachable — camera health will appear as soon as it answers again.'
+                    : !m.last_poll_ms ? 'Connecting to Nx and discovering cameras…'
+                    : healthSnapshot.cameras.length ? 'No cameras match this filter. 🎉' : 'No cameras found on this Nx server.';
+                list.insertAdjacentHTML('beforeend', `<div data-role="health-empty" class="md:col-span-2 text-center text-xs text-slate-500 py-10 border border-dashed border-white/10 rounded-2xl">${msg}</div>`);
+            }
+        }
+
+        function renderInfra() {
+            const { servers = [], storages = [] } = healthSnapshot;
+            const el = document.getElementById('fleet-infra');
+            if (!servers.length && !storages.length) { el.innerHTML = ''; return; }
+            el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">` + servers.map(sv => {
+                const st = storages.filter(x => x.server_id === sv.id);
+                const rows = st.map(x => {
+                    const used = x.total_bytes && x.free_bytes != null ? 1 - x.free_bytes / x.total_bytes : null;
+                    const bar = used == null ? '' : `<div class="h-1.5 rounded-full bg-white/5 overflow-hidden mt-1"><div class="h-full rounded-full ${x.online === false ? 'bg-rose-500' : 'bg-gradient-to-r from-cyan-500 to-purple-500'}" style="width:${(used * 100).toFixed(1)}%"></div></div>`;
+                    return `<div class="mt-2">
+                        <div class="flex justify-between gap-2 text-[11px]"><span class="font-mono text-slate-400 truncate" title="${esc(x.url)}">${esc(x.url || 'storage')}</span>
+                        <span class="${x.online === false ? 'text-rose-400 font-semibold' : 'text-slate-500'} whitespace-nowrap">${x.online === false ? 'OFFLINE' : x.total_bytes ? `${fmtBytes(x.free_bytes)} free of ${fmtBytes(x.total_bytes)}` : (x.used_for_writing ? 'recording' : '')}${x.backup ? ' · backup' : ''}</span></div>${bar}</div>`;
+                }).join('');
+                return `<div class="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="min-w-0"><div class="text-xs font-semibold text-slate-200 truncate">🖥 ${esc(sv.name || 'Nx server')}</div>
+                        <div class="text-[10px] text-slate-500 truncate">${esc([sv.version ? `v${sv.version}` : null, sv.os, sv.host].filter(Boolean).join(' · '))}</div></div>
+                        ${statusPill(sv.online ? 'Online' : (sv.status || 'Offline'))}
+                    </div>${rows || '<div class="text-[11px] text-slate-600 mt-2">Storage details not exposed by this server</div>'}</div>`;
+            }).join('') + `</div>`;
+        }
+
+        // The small health strip under each Camera View card's <select>.
+        function updateCardHealth(card, view) {
+            const el = card.querySelector('[data-role="health"]');
+            if (!el) return;
+            const c = view.cameraId && healthById[view.cameraId];
+            if (!c) { el.classList.add('hidden'); return; }
+            const g = GRADES[c.grade] || GRADES.fair;
+            const rec = c.recording || {};
+            el.dataset.cameraId = c.id;
+            el.classList.remove('hidden');
+            el.innerHTML = `<span class="w-2 h-2 rounded-full shrink-0" style="background:${g.color};box-shadow:0 0 8px ${g.color}"></span>
+                <span class="font-semibold ${g.text}">${g.label} ${c.score}</span>
+                <span class="text-slate-600">·</span><span class="truncate">${esc([
+                    rec.coverage_24h != null ? `24h rec ${fmtPct(rec.coverage_24h, 0)}` : null,
+                    streamLabel(c.streams && c.streams[0]),
+                    c.issues.length ? `${c.issues.length} issue${c.issues.length > 1 ? 's' : ''}` : 'no issues',
+                ].filter(Boolean).join(' · '))}</span>
+                <span class="ml-auto text-slate-500">Details →</span>`;
+        }
+
+        // =====================================================================
+        // CAMERA DETAIL DRAWER — GET /api/health/cameras/<id>
+        // =====================================================================
+        let drawerCameraId = null;
+        let drawerTimer = null;
+        let drawerLive = false;
+
+        function openDrawerEl(id) {
+            document.getElementById('drawer-backdrop').classList.remove('hidden');
+            document.getElementById(id).classList.remove('translate-x-full');
+        }
+
+        function closeDrawers() {
+            document.getElementById('drawer-backdrop').classList.add('hidden');
+            document.getElementById('camera-drawer').classList.add('translate-x-full');
+            document.getElementById('notif-panel').classList.add('translate-x-full');
+            notifPanelOpen = false;
+            clearInterval(drawerTimer);
+            drawerCameraId = null;
+            // Actually drop the MJPEG connection, not just hide it.
+            const img = document.getElementById('drawer-img');
+            img.removeAttribute('src');
+            img.classList.add('hidden');
+            drawerLive = false;
+        }
+
+        async function openCameraDrawer(id) {
+            if (!id) return;
+            closeDrawers();
+            drawerCameraId = id;
+            const c = healthById[id];
+            document.getElementById('drawer-header').innerHTML = drawerHeaderHTML(c || { id, name: 'Loading…' });
+            document.getElementById('drawer-content').innerHTML = `<div class="text-xs text-slate-500 py-10 text-center animate-pulse">Pulling everything Nx knows about this camera…</div>`;
+            openDrawerEl('camera-drawer');
+            refreshDrawerSnapshot();
+            await loadDrawer();
+            drawerTimer = setInterval(loadDrawer, 10000);
+        }
+
+        function refreshDrawerSnapshot() {
+            if (!drawerCameraId) return;
+            const img = document.getElementById('drawer-img');
+            const empty = document.getElementById('drawer-img-empty');
+            drawerLive = false;
+            updateLiveControls();
+            empty.innerHTML = `${CAMERA_ICON}<span>LOADING SNAPSHOT…</span>`;
+            img.onload = () => { img.classList.remove('hidden'); };
+            img.onerror = () => { img.classList.add('hidden'); empty.innerHTML = `${OFFLINE_ICON}<span>NO SNAPSHOT AVAILABLE</span>`; };
+            img.src = thumbUrl(drawerCameraId, Date.now());
+        }
+
+        function toggleDrawerLive() {
+            if (!drawerCameraId) return;
+            if (drawerLive) { refreshDrawerSnapshot(); return; }
+            const img = document.getElementById('drawer-img');
+            drawerLive = true;
+            updateLiveControls();
+            img.onerror = () => { drawerLive = false; updateLiveControls(); img.classList.add('hidden'); document.getElementById('drawer-img-empty').innerHTML = `${OFFLINE_ICON}<span>LIVE STREAM UNAVAILABLE</span>`; };
+            img.src = withToken(`${STREAM_URL}?camera_id=${encodeURIComponent(drawerCameraId)}&t=${Date.now()}`);
+        }
+
+        function updateLiveControls() {
+            document.getElementById('drawer-live-badge').classList.toggle('hidden', !drawerLive);
+            document.getElementById('drawer-live-btn').innerText = drawerLive ? '■ Stop live' : '▶ Live view';
+        }
+
+        async function loadDrawer() {
+            const id = drawerCameraId;
+            if (!id) return;
+            try {
+                const res = await fetch(`${API}/health/cameras/${encodeURIComponent(id)}`);
+                if (id !== drawerCameraId) return;
+                if (!res.ok) {
+                    document.getElementById('drawer-content').innerHTML = `<div class="text-xs text-slate-500 py-10 text-center">This camera isn't on Nx's device list (yet). If it was just added, give the monitor a few seconds.</div>`;
+                    return;
+                }
+                renderDrawer(await res.json());
+            } catch (e) { console.error("Camera detail error:", e); }
+        }
+
+        function drawerHeaderHTML(d) {
+            const g = GRADES[d.grade];
+            return `<div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="text-lg font-bold text-white leading-tight break-words">${esc(d.name || d.id)}</div>
+                    <div class="text-xs text-slate-500 mt-0.5">${esc([d.vendor, d.model].filter(Boolean).join(' '))}</div>
+                    <div class="flex items-center gap-2 mt-2 flex-wrap">${d.status ? statusPill(d.status) : ''}
+                        ${d.status_since_ms ? `<span class="text-[11px] text-slate-500">since ${fmtAgo(d.status_since_ms)}</span>` : ''}</div>
+                </div>
+                <div class="flex items-start gap-2">
+                    ${g ? `<div class="flex flex-col items-center">${scoreRing(d.score, d.grade, 56)}<span class="text-[10px] font-bold uppercase tracking-wider ${g.text}">${g.label}</span></div>` : ''}
+                    <button onclick="closeDrawers()" class="text-slate-500 hover:text-white text-lg px-1" title="Close (Esc)">✕</button>
+                </div>
+            </div>`;
+        }
+
+        const section = (title, body, right = '') => `
+            <div class="mt-6">
+                <div class="flex items-center justify-between mb-2"><div class="text-[10px] uppercase tracking-[0.15em] text-slate-500 font-semibold">${title}</div>${right}</div>
+                ${body}
+            </div>`;
+        const kv = rows => `<div class="grid grid-cols-[minmax(110px,auto),1fr] gap-x-4 gap-y-1.5 text-xs rounded-xl border border-white/5 bg-white/[0.02] p-3">${
+            rows.filter(r => r[1] != null && r[1] !== '').map(([k, v]) => `<div class="text-slate-500">${k}</div><div class="text-slate-200 break-all">${v}</div>`).join('')}</div>`;
+        const yesNo = v => v ? '<span class="text-emerald-300">Yes</span>' : '<span class="text-slate-500">No</span>';
+
+        function timelineHTML(t, periods) {
+            const start = t.window_start_ms, end = t.window_end_ms, span = end - start;
+            if (!periods) return `<div class="text-[11px] text-slate-500 rounded-xl border border-white/5 bg-white/[0.02] p-3">Archive data not available from this Nx server yet.</div>`;
+            const segs = periods.map(([s, e]) => {
+                const left = (s - start) / span * 100, width = Math.max(0.2, (e - s) / span * 100);
+                return `<div class="absolute top-0 bottom-0 bg-emerald-400/80" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%" title="Recorded ${fmtTime(s)} → ${fmtTime(e)}"></div>`;
+            }).join('');
+            const drops = (t.disconnects || []).filter(ts => ts >= start && ts <= end).map(ts =>
+                `<div class="absolute top-0 bottom-0 w-[3px] -ml-px bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,1)]" style="left:${((ts - start) / span * 100).toFixed(3)}%" title="Disconnected ${fmtTime(ts)}"></div>`).join('');
+            const labels = [0, 6, 12, 18, 24].map(h => {
+                const ts = start + h * 3600000;
+                return `<span>${h === 24 ? 'now' : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+            }).join('');
+            return `<div class="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+                <div class="relative h-6 rounded-md bg-slate-800/80 overflow-hidden">${segs}${drops}</div>
+                <div class="flex justify-between text-[9px] text-slate-500 font-mono mt-1.5">${labels}</div>
+                <div class="flex gap-4 text-[10px] text-slate-500 mt-1"><span><span class="inline-block w-2 h-2 rounded-sm bg-emerald-400/80 mr-1"></span>recorded</span><span><span class="inline-block w-2 h-2 rounded-sm bg-slate-800 border border-white/10 mr-1"></span>no footage</span>${drops ? '<span><span class="inline-block w-0.5 h-2 bg-rose-500 mr-1"></span>disconnect</span>' : ''}</div>
+            </div>`;
+        }
+
+        function eventRowHTML(e, compact = false) {
+            const s = SEV[e.severity] || SEV.info;
+            return `<div class="flex gap-2.5 p-2.5 rounded-xl border ${s.cls}">
+                <div class="mt-0.5">${sevIcon(e.severity)}</div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <span class="text-xs font-semibold ${s.text}">${esc(e.title)}${e.count > 1 ? ` ×${e.count}` : ''}</span>
+                        <span class="text-[10px] text-slate-500 whitespace-nowrap" title="${esc(fmtTime(e.last_ts || e.ts))}">${e.count > 1 ? 'latest ' : ''}${fmtAgo(e.last_ts || e.ts)}</span>
+                    </div>
+                    ${!compact && e.camera_name ? `<button data-cam="${esc(e.camera_id || '')}" onclick="openCameraDrawer(this.dataset.cam)" ${e.camera_id ? '' : 'disabled'} class="text-[11px] text-cyan-300 hover:underline disabled:no-underline disabled:text-slate-300 text-left">${esc(e.camera_name)}</button>` : ''}
+                    ${e.message ? `<div class="text-[11px] text-slate-400 leading-snug mt-0.5">${esc(e.message)}</div>` : ''}
+                    <div class="text-[9px] uppercase tracking-wider text-slate-600 mt-1">${e.source === 'nx' ? 'Nx event log' : 'VisionSync monitor'} · ${esc(fmtTime(e.ts))}</div>
+                </div>
+            </div>`;
+        }
+
+        function jsonCell(v) {
+            if (v !== null && typeof v === 'object') return `<pre class="text-[10px] text-slate-300 whitespace-pre-wrap break-all max-h-48 overflow-auto">${esc(JSON.stringify(v, null, 1))}</pre>`;
+            return `<span class="font-mono text-[11px]">${esc(String(v))}</span>`;
+        }
+
+        function paramsTable(obj) {
+            const keys = Object.keys(obj || {}).sort((a, b) => a.localeCompare(b));
+            if (!keys.length) return '<div class="text-[11px] text-slate-600 p-3">None reported.</div>';
+            return `<div class="divide-y divide-white/5">${keys.map(k => `<div class="grid grid-cols-[minmax(120px,40%),1fr] gap-3 px-3 py-1.5 text-xs"><div class="text-slate-500 font-mono text-[11px] break-all">${esc(k)}</div><div class="text-slate-200 min-w-0">${jsonCell(obj[k])}</div></div>`).join('')}</div>`;
+        }
+
+        function renderDrawer(d) {
+            document.getElementById('drawer-header').innerHTML = drawerHeaderHTML(d);
+            // Keep any <details> the operator expanded open across the 10s refresh.
+            const content = document.getElementById('drawer-content');
+            const openDetails = new Set([...content.querySelectorAll('details[open]')].map(x => x.dataset.key));
+            const rec = d.recording || {};
+            const caps = d.capabilities || {};
+
+            const issues = d.issues.length
+                ? `<div class="space-y-1.5">${d.issues.map(i => `<div class="flex items-start gap-2 text-xs ${SEV[i.severity]?.text} rounded-lg border ${SEV[i.severity]?.cls} px-3 py-2">${sevIcon(i.severity, 'w-4 h-4 mt-px')}<span>${esc(i.text)}</span></div>`).join('')}</div>`
+                : `<div class="text-xs text-emerald-300 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2">✓ Everything looks healthy — online, recording as scheduled, no recent drops.</div>`;
+
+            const streams = d.streams.length ? `<div class="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden"><table class="w-full text-xs">
+                <thead class="text-[10px] uppercase tracking-wider text-slate-500"><tr class="border-b border-white/5"><th class="text-left font-semibold p-2 pl-3">Stream</th><th class="text-left font-semibold p-2">Resolution</th><th class="text-left font-semibold p-2">Codec</th><th class="text-right font-semibold p-2">FPS actual / set</th><th class="text-right font-semibold p-2 pr-3">Bitrate</th></tr></thead>
+                <tbody>${d.streams.map(s => {
+                    const low = s.fps && s.actual_fps != null && s.actual_fps / s.fps < 0.7;
+                    return `<tr class="border-b border-white/5 last:border-0"><td class="p-2 pl-3 capitalize text-slate-300">${esc(s.name)}</td><td class="p-2 font-mono text-slate-200">${esc(s.resolution || '—')}</td><td class="p-2 text-slate-300">${esc(s.codec || '—')}</td>
+                    <td class="p-2 text-right font-mono ${low ? 'text-amber-300' : 'text-slate-200'}">${s.actual_fps != null ? s.actual_fps.toFixed(1) : '—'} / ${s.fps != null ? Math.round(s.fps) : '—'}</td>
+                    <td class="p-2 pr-3 text-right font-mono text-slate-200">${s.bitrate_mbps != null ? `${s.bitrate_mbps.toFixed(2)} Mbps` : '—'}</td></tr>`;
+                }).join('')}</tbody></table></div>`
+                : `<div class="text-[11px] text-slate-500 rounded-xl border border-white/5 bg-white/[0.02] p-3">Nx hasn't reported stream details for this camera yet.</div>`;
+
+            const capChips = [['Audio', caps.audio], ['PTZ', caps.ptz], ['Dual stream', caps.dual_stream], ['I/O ports', caps.io]]
+                .map(([k, v]) => chip(`${v ? '✓' : '✗'} ${k}`, v ? 'text-emerald-300' : 'text-slate-500')).join(' ')
+                + (caps.license_used != null ? ' ' + chip(caps.license_used ? '✓ Licensed' : '✗ No license', caps.license_used ? 'text-emerald-300' : 'text-amber-300') : '');
+
+            const idn = d.identity || {};
+            const copyBtn = v => `<button data-copy="${esc(v)}" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.copy);showToast('COPIED',false)" class="ml-1 text-slate-500 hover:text-cyan-300" title="Copy">⧉</button>`;
+            const details = (key, title, body) => `<details data-key="${key}" ${openDetails.has(key) ? 'open' : ''} class="rounded-xl border border-white/5 bg-white/[0.02] mt-2 group">
+                <summary class="cursor-pointer select-none px-3 py-2 text-xs text-slate-300 hover:text-cyan-300 flex justify-between"><span>${title}</span><span class="text-slate-600 group-open:rotate-90 transition">›</span></summary>
+                <div class="border-t border-white/5">${body}</div></details>`;
+
+            content.innerHTML =
+                section('Health check', issues) +
+                section('Recording · last 24h', timelineHTML(d.timeline, d.timeline.periods) + `<div class="mt-2">${kv([
+                    ['Schedule', esc(rec.mode)],
+                    ['Archived (24h)', rec.coverage_24h != null ? `${fmtPct(rec.coverage_24h, 2)} · ${rec.gaps_24h} gap${rec.gaps_24h === 1 ? '' : 's'} ≥1 min` : '—'],
+                    ['Writing now', yesNo(rec.recording_now)],
+                    ['Last footage', rec.last_recorded_ms ? `${fmtAgo(rec.last_recorded_ms)} <span class="text-slate-500">(${esc(fmtTime(rec.last_recorded_ms))})</span>` : '—'],
+                    ['Scheduled fps', rec.scheduled_fps],
+                    ['Archive keep', rec.min_archive_days || rec.max_archive_days ? `min ${rec.min_archive_days ?? 'auto'} · max ${rec.max_archive_days ?? 'auto'} days` : 'auto (until storage is full)'],
+                ])}</div>`) +
+                section('Streams', streams) +
+                section('Reliability', kv([
+                    ['Status', `${statusPill(d.status)} <span class="text-slate-500 text-[11px]">since ${esc(fmtTime(d.status_since_ms))}</span>`],
+                    ['Uptime', d.uptime_pct != null ? `${d.uptime_pct}% <span class="text-slate-500">over ${fmtDur(d.monitored_s)} monitored</span>` : `<span class="text-slate-500">measuring… (${fmtDur(d.monitored_s)} so far)</span>`],
+                    ['Drops (24h)', d.disconnects_24h ? `<span class="text-rose-300">${d.disconnects_24h}</span>` : '<span class="text-emerald-300">0</span>'],
+                ])) +
+                section('Identity', kv([
+                    ['Camera ID', `<span class="font-mono text-[11px]">${esc(d.id)}</span>${copyBtn(d.id)}`],
+                    ['IP address', d.ip ? `<span class="font-mono">${esc(d.ip)}</span>` : null],
+                    ['MAC / physical', d.mac ? `<span class="font-mono">${esc(d.mac)}</span>` : null],
+                    ['Vendor', esc(d.vendor)], ['Model', esc(d.model)], ['Firmware', esc(d.firmware)],
+                    ['Group', esc(d.group)], ['Nx server', esc(d.server_name)],
+                    ['Logical ID', esc(idn.logical_id)],
+                    ['Device URL', idn.url ? `<span class="font-mono text-[11px]">${esc(idn.url)}</span>` : null],
+                ])) +
+                section('Capabilities', `<div class="flex flex-wrap gap-1.5">${capChips}</div>`) +
+                section('Recent events', d.events.length ? `<div class="space-y-2">${d.events.slice(0, 15).map(e => eventRowHTML(e, true)).join('')}</div>` : '<div class="text-[11px] text-slate-500 rounded-xl border border-white/5 bg-white/[0.02] p-3">No events recorded for this camera. 👌</div>') +
+                section('Everything Nx reports', details('params', `Device parameters (${Object.keys(d.parameters || {}).length})`, paramsTable(d.parameters))
+                    + details('options', 'Device options', paramsTable(d.options))
+                    + details('schedule', `Recording schedule tasks (${(d.schedule_tasks || []).length})`, `<div class="p-3">${jsonCell(d.schedule_tasks || [])}</div>`)
+                    + details('raw', 'Raw device record', paramsTable(d.raw))
+                    + `<div class="text-[10px] text-slate-600 mt-2">Passwords, credentials and credentialed stream URLs are stripped before anything reaches this page.</div>`) +
+                `<div class="h-6"></div>`;
+        }
+
+        // =====================================================================
+        // NOTIFICATIONS — GET /api/notifications?since=<seq>
+        // Read/unread + alert prefs are per-browser (localStorage) on purpose:
+        // two operators on two screens each keep their own unread badge.
+        // =====================================================================
+        const NOTIF_SEEN_KEY = "visionsync_notif_seen_seq";
+        const NOTIF_PREFS_KEY = "visionsync_notif_prefs";
+        let notifEvents = [];
+        let notifLatestSeq = 0;
+        let notifBootstrapped = false;
+        let notifPanelOpen = false;
+        let notifFilter = 'all';
+        let notifHighlightFrom = Infinity;
+
+        function lsGet(k, fallback) { try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; } }
+        function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode — non-essential */ } }
+
+        let notifSeenSeq = lsGet(NOTIF_SEEN_KEY, null);
+        let notifPrefs = Object.assign({ desktop: false, sound: false }, lsGet(NOTIF_PREFS_KEY, {}));
+
+        async function fetchNotifications() {
+            try {
+                const res = await fetch(`${API}/notifications?since=${notifLatestSeq}&limit=500`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.latest_seq < notifLatestSeq) {
+                    // Server-side history was reset (camera_events.json deleted) — start over.
+                    notifEvents = []; notifLatestSeq = 0; notifSeenSeq = 0; lsSet(NOTIF_SEEN_KEY, 0);
+                    return fetchNotifications();
+                }
+                // An existing entry can come back with a bumped ×count
+                // (updated_seq) — replace it in place rather than duplicate it.
+                const incoming = data.events || [];
+                const known = new Set(notifEvents.map(e => e.seq));
+                const fresh = incoming.filter(e => !known.has(e.seq));
+                const bySeq = new Map(incoming.map(e => [e.seq, e]));
+                notifEvents = notifEvents.map(e => bySeq.get(e.seq) || e).concat(fresh).slice(-500);
+                notifLatestSeq = data.latest_seq;
+
+                if (!notifBootstrapped) {
+                    notifBootstrapped = true;
+                    // First visit on this browser: don't flood the badge with history.
+                    if (notifSeenSeq == null) { notifSeenSeq = notifLatestSeq; lsSet(NOTIF_SEEN_KEY, notifSeenSeq); }
+                } else {
+                    fresh.forEach(announceEvent);
+                    if (fresh.some(e => e.camera_id || e.type.startsWith('nx-'))) fetchHealth();
+                }
+                if (notifPanelOpen) markAllRead();
+                updateNotifBadge();
+                if (notifPanelOpen) renderNotifList();
+            } catch (e) { console.error("Notification fetch error:", e); }
+        }
+
+        function unreadEvents() { return notifEvents.filter(e => e.seq > (notifSeenSeq || 0)); }
+
+        function updateNotifBadge() {
+            const unread = unreadEvents();
+            const badge = document.getElementById('notif-badge');
+            badge.classList.toggle('hidden', unread.length === 0);
+            badge.innerText = unread.length > 99 ? '99+' : unread.length;
+            const crit = unread.some(e => e.severity === 'critical');
+            badge.className = `${unread.length ? '' : 'hidden '}absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${crit ? 'bg-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.8)]' : 'bg-amber-400 text-slate-950 shadow-[0_0_12px_rgba(251,191,36,0.6)]'}`;
+            document.title = `${unread.length ? `(${unread.length}) ` : ''}VisionSync — Camera Configuration`;
+        }
+
+        function markAllRead() {
+            notifSeenSeq = notifLatestSeq;
+            lsSet(NOTIF_SEEN_KEY, notifSeenSeq);
+            updateNotifBadge();
+        }
+
+        function toggleNotifPanel(open) {
+            if (!open) { closeDrawers(); return; }
+            closeDrawers();
+            notifPanelOpen = true;
+            notifHighlightFrom = notifSeenSeq || 0;
+            document.getElementById('pref-desktop').checked = !!notifPrefs.desktop;
+            document.getElementById('pref-sound').checked = !!notifPrefs.sound;
+            renderNotifList();
+            openDrawerEl('notif-panel');
+            markAllRead();
+        }
+
+        function setNotifFilter(f) { notifFilter = f; renderNotifList(); }
+
+        function renderNotifList() {
+            document.querySelectorAll('#notif-filters [data-filter]').forEach(b => {
+                const on = b.dataset.filter === notifFilter;
+                b.className = `px-3 py-1 rounded-full border transition ${on ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300' : 'border-white/10 text-slate-400 hover:text-slate-200'}`;
+            });
+            const events = [...notifEvents]
+                .filter(e => notifFilter === 'all' || (notifFilter === 'recovery' ? e.severity === 'success' : e.severity === notifFilter))
+                .sort((a, b) => b.ts - a.ts);
+            const list = document.getElementById('notif-list');
+            if (!events.length) {
+                list.innerHTML = `<div class="text-center py-16 text-slate-500 text-xs"><div class="text-3xl mb-2">🛡️</div>${notifFilter === 'all' ? 'No camera events yet — VisionSync is watching every camera on Nx and will alert you here the moment one drops.' : 'Nothing in this category.'}</div>`;
+                return;
+            }
+            let lastDay = '';
+            list.innerHTML = events.map(e => {
+                const day = new Date(e.ts).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+                const header = day !== lastDay ? `<div class="text-[10px] uppercase tracking-[0.15em] text-slate-500 font-semibold pt-2 first:pt-0">${esc(day)}</div>` : '';
+                lastDay = day;
+                const row = eventRowHTML(e);
+                return header + (e.seq > notifHighlightFrom ? `<div class="relative"><span class="absolute -left-2 top-3 w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,1)]"></span>${row}</div>` : row);
+            }).join('');
+        }
+
+        async function setNotifPref(key, value) {
+            if (key === 'desktop' && value) {
+                if (!('Notification' in window)) { showToast("DESKTOP ALERTS NOT SUPPORTED HERE", true); value = false; }
+                else if (!window.isSecureContext) { showToast("DESKTOP ALERTS NEED LOCALHOST OR HTTPS", true); value = false; }
+                else if (Notification.permission !== 'granted') {
+                    value = (await Notification.requestPermission()) === 'granted';
+                    if (!value) showToast("DESKTOP ALERTS BLOCKED BY BROWSER", true);
+                }
+                document.getElementById('pref-desktop').checked = value;
+            }
+            if (key === 'sound' && value) beep('success');
+            notifPrefs[key] = value;
+            lsSet(NOTIF_PREFS_KEY, notifPrefs);
+        }
+
+        let audioCtx = null;
+        function beep(severity) {
+            try {
+                audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                const tones = severity === 'critical' ? [880, 660, 880] : [660, 990];
+                tones.forEach((f, i) => {
+                    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                    o.type = 'sine'; o.frequency.value = f;
+                    const t = audioCtx.currentTime + i * 0.18;
+                    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.15, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+                    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.17);
+                });
+            } catch (e) { /* audio blocked until a user gesture — fine */ }
+        }
+
+        // Pop-up + desktop + sound for events that just happened. Backfilled
+        // history (e.g. Nx's event log on first contact) is older than a few
+        // minutes and only lands quietly in the feed.
+        function announceEvent(e) {
+            if (Date.now() - e.ts > 5 * 60 * 1000) return;
+            if (e.severity === 'info') return;
+            showAlert(e);
+            const bell = document.getElementById('notif-bell-icon');
+            bell.classList.remove('vs-bell-ring'); void bell.offsetWidth; bell.classList.add('vs-bell-ring');
+            if (notifPrefs.sound && e.severity === 'critical') beep('critical');
+            if (notifPrefs.desktop && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                    const n = new Notification(`${e.camera_name ? e.camera_name + ' — ' : ''}${e.title}`, { body: e.message || '', tag: `visionsync-${e.seq}`, requireInteraction: e.severity === 'critical' });
+                    n.onclick = () => { window.focus(); if (e.camera_id) openCameraDrawer(e.camera_id); n.close(); };
+                } catch (err) { /* some browsers only allow notifications from a service worker */ }
+            }
+        }
+
+        function showAlert(e) {
+            const s = SEV[e.severity] || SEV.info;
+            const stack = document.getElementById('alert-stack');
+            while (stack.children.length >= 4) stack.firstElementChild.remove();
+            const el = document.createElement('div');
+            el.className = `vs-alert-in pointer-events-auto flex gap-3 p-3 rounded-2xl border ${s.cls} bg-slate-900/95 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.6)] cursor-pointer`;
+            el.style.borderLeft = `3px solid ${s.color}`;
+            el.innerHTML = `<div class="mt-0.5">${sevIcon(e.severity, 'w-5 h-5')}</div>
+                <div class="min-w-0 flex-1">
+                    <div class="text-sm font-semibold ${s.text}">${esc(e.title)}</div>
+                    ${e.camera_name ? `<div class="text-xs text-slate-200 truncate">${esc(e.camera_name)}</div>` : ''}
+                    ${e.message ? `<div class="text-[11px] text-slate-400 leading-snug mt-0.5 line-clamp-2">${esc(e.message)}</div>` : ''}
+                </div>
+                <button class="text-slate-500 hover:text-white self-start text-sm" title="Dismiss">✕</button>`;
+            el.onclick = ev => {
+                el.remove();
+                if (ev.target.closest('button')) return;
+                if (e.camera_id) openCameraDrawer(e.camera_id); else toggleNotifPanel(true);
+            };
+            stack.appendChild(el);
+            setTimeout(() => el.remove(), e.severity === 'critical' ? 20000 : 9000);
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !authPromptVisible) closeDrawers(); });
+
         fetchState();
+        fetchHealth();
+        fetchNotifications();
         setInterval(checkHealth, 5000);
         setInterval(() => fetchCameras(), 8000);
+        setInterval(fetchHealth, 10000);
+        setInterval(fetchNotifications, 5000);
+        // Keep relative "x ago" labels honest between polls.
+        setInterval(() => { if (notifPanelOpen) renderNotifList(); }, 30000);
     </script>
 </body>
 </html>
