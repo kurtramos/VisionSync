@@ -82,8 +82,10 @@ the tab — it only stops VisionSync's own process.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/cameras` | List all Nx cameras: `{ "<id>": {id, name, mac, vendor, model, status, online} }`. Add `?force=1` to bypass the 5-minute cache. |
+| GET | `/api/cameras` | List all Nx cameras: `{ "<id>": {id, name, display_name, mac, vendor, model, status, online} }`. Add `?force=1` to bypass the 5-minute cache. |
 | GET | `/api/cameras/<id>` | Single-camera lookup. |
+| GET | `/api/display-names` | Each named camera's display name: `{ "<id>": "Vault" }`. The one place a camera's real name is set; Zone Director, Scene Intelligence and the admin console read it. `/api/cameras` also has `display_name` (falls back to the Nx `name`). |
+| PUT | `/api/cameras/<id>/display-name` | Body `{"display_name": "Vault"}` (max 60 characters; empty = back to the Nx name). Also editable in the camera's drawer on this page. |
 | GET | `/api/stream?camera_id=<id>` | MJPEG live preview of that camera — `camera_id` is required. |
 | GET / POST | `/api/settings` | Get/set the floor camera picks: `DWELL_CAMERA_ID`, `POS_CAMERA_ID`. The response also includes `EXTRA_CAMERAS` (read-only here — manage those through `/api/camera-slots` below). |
 | GET / POST | `/api/camera-slots` | GET lists additional camera views beyond the floor: `[{id, label, camera_id}, ...]`. POST adds a new one (auto-labelled `Camera 3`, `Camera 4`, ...) and returns it. |

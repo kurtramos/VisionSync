@@ -677,6 +677,26 @@
             return [s.resolution, fps != null ? `${Math.round(fps)} fps` : null].filter(Boolean).join(' @ ');
         }
 
+        // Each camera's display name ("Vault"), the one place it's set: Zone
+        // Director, Scene Intelligence and the admin console read it from here.
+        let displayNames = {};
+        const camName = c => (c && (displayNames[c.id] || c.name)) || (c && c.id) || '';
+        async function fetchDisplayNames() {
+            try { const res = await fetch(`${API}/display-names`); if (res.ok) displayNames = await res.json(); } catch (e) { /* next round */ }
+        }
+        async function saveDisplayName(id) {
+            const input = document.getElementById('display-name-input');
+            const res = await fetch(`${API}/cameras/${encodeURIComponent(id)}/display-name`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ display_name: input.value }) });
+            if (!res.ok) { showToast('NAME NOT SAVED', true); return; }
+            await fetchDisplayNames();
+            showToast('NAME SAVED', false);
+            if (healthSnapshot) renderHealthList();
+            const c = healthById[id];
+            if (c) document.getElementById('drawer-header').innerHTML = drawerHeaderHTML(c);
+            loadDrawer();
+        }
+
         let healthSnapshot = null;
         let healthById = {};
         let healthFilter = 'all';
@@ -685,6 +705,7 @@
             try {
                 const res = await fetch(`${API}/health/cameras`);
                 if (!res.ok) return;
+                await fetchDisplayNames();
                 healthSnapshot = await res.json();
                 healthById = {};
                 healthSnapshot.cameras.forEach(c => { healthById[c.id] = c; });
@@ -740,7 +761,7 @@
             const rank = c => (c.online ? 1 : 0);
             return healthSnapshot.cameras
                 .filter(c => healthFilter === 'all' || (healthFilter === 'offline' ? !c.online : c.issues.length > 0))
-                .filter(c => !q || [c.name, c.ip, c.mac, c.model, c.vendor, c.id, c.firmware].some(v => (v || '').toLowerCase().includes(q)))
+                .filter(c => !q || [camName(c), c.name, c.ip, c.mac, c.model, c.vendor, c.id, c.firmware].some(v => (v || '').toLowerCase().includes(q)))
                 .sort((a, b) => rank(a) - rank(b) || a.score - b.score || (a.name || '').localeCompare(b.name || ''));
         }
 
@@ -760,7 +781,7 @@
             return `
                 <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                        <div class="text-sm font-semibold text-slate-100 truncate" title="${esc(c.name)}">${esc(c.name || c.id)}</div>
+                        <div class="text-sm font-semibold text-slate-100 truncate" title="${esc(c.name)}">${esc(camName(c))}</div>
                         <div class="text-[11px] text-slate-500 truncate">${esc([c.vendor, c.model].filter(Boolean).join(' ') || 'Unknown model')}${c.ip ? ` · <span class="font-mono">${esc(c.ip)}</span>` : ''}</div>
                     </div>
                     <div class="flex flex-col items-center -mt-0.5">${scoreRing(c.score, c.grade, 40)}<span class="text-[9px] font-bold uppercase tracking-wider ${g.text}">${g.label}</span></div>
@@ -952,7 +973,8 @@
             const g = GRADES[d.grade];
             return `<div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <div class="text-lg font-bold text-white leading-tight break-words">${esc(d.name || d.id)}</div>
+                    <div class="text-lg font-bold text-white leading-tight break-words">${esc(camName(d))}</div>
+                    ${displayNames[d.id] && d.name && d.name !== displayNames[d.id] ? `<div class="text-[11px] text-slate-500">on Nx: ${esc(d.name)}</div>` : ''}
                     <div class="text-xs text-slate-500 mt-0.5">${esc([d.vendor, d.model].filter(Boolean).join(' '))}</div>
                     <div class="flex items-center gap-2 mt-2 flex-wrap">${d.status ? statusPill(d.status) : ''}
                         ${d.status_since_ms ? `<span class="text-[11px] text-slate-500">since ${fmtAgo(d.status_since_ms)}</span>` : ''}</div>
@@ -1052,7 +1074,18 @@
                 <summary class="cursor-pointer select-none px-3 py-2 text-xs text-slate-300 hover:text-cyan-300 flex justify-between"><span>${title}</span><span class="text-slate-600 group-open:rotate-90 transition">›</span></summary>
                 <div class="border-t border-white/5">${body}</div></details>`;
 
+            const nameBox = `<div class="flex gap-2">
+                    <input id="display-name-input" maxlength="60" value="${esc(displayNames[d.id] || '')}" placeholder="${esc(d.name || 'e.g. Vault')}"
+                        onkeydown="if (event.key === 'Enter') saveDisplayName('${esc(d.id)}')"
+                        class="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50">
+                    <button onclick="saveDisplayName('${esc(d.id)}')" class="px-3 py-2 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25">Save</button>
+                </div>
+                <div class="text-[11px] text-slate-500 mt-1.5">What people call this camera. Zone Director and Scene Intelligence use it in alerts, voice and Bookmarks. Empty: the Nx name.</div>`;
+            // Don't redraw the name box out from under someone typing in it (10 s refresh).
+            const typing = document.activeElement && document.activeElement.id === 'display-name-input';
+            const typedValue = typing ? document.activeElement.value : null;
             content.innerHTML =
+                section('Display name', nameBox) +
                 section('Health check', issues) +
                 section('Recording · last 24h', timelineHTML(d.timeline, d.timeline.periods) + `<div class="mt-2">${kv([
                     ['Schedule', esc(rec.mode)],
@@ -1085,6 +1118,7 @@
                     + details('raw', 'Raw device record', paramsTable(d.raw))
                     + `<div class="text-[10px] text-slate-600 mt-2">Passwords, credentials and credentialed stream URLs are stripped before anything reaches this page.</div>`) +
                 `<div class="h-6"></div>`;
+            if (typing) { const el = document.getElementById('display-name-input'); el.value = typedValue; el.focus(); }
         }
 
         // =====================================================================

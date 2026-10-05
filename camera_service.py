@@ -34,6 +34,7 @@ Witness directly — see README.md for the internal API contract.
 """
 
 import os
+import re
 import signal
 import threading
 import time
@@ -166,6 +167,11 @@ DEFAULT_SETTINGS = {
     # added/removed freely via /api/camera-slots. Each entry:
     # {"id": "<8-hex>", "label": "Camera 3", "camera_id": "<nx camera id>"}
     "EXTRA_CAMERAS": [],
+    # Each camera's real name for people ("Vault", "Front Door"), by Nx camera
+    # id: the one place it's set (PLATFORM_GUIDE.md step 6). Zone Director,
+    # Scene Intelligence and the admin console read it from here
+    # (GET /api/display-names). A camera without one shows its Nx name.
+    "DISPLAY_NAMES": {},
 }
 
 SETTINGS = dict(DEFAULT_SETTINGS)
@@ -254,12 +260,13 @@ def get_cameras():
     other module can ask "what cameras exist and are they online" without
     ever holding Nx credentials or a hardcoded camera list of its own.
 
-    Response: { "<camera id>": { id, name, mac, vendor, model, status, online }, ... }
+    Response: { "<camera id>": { id, name, display_name, mac, vendor, model, status, online }, ... }
+    (name is Nx's; display_name is the one set here, else Nx's.)
     """
     now = time.time()
     force_refresh = request.args.get("force", "").lower() in ("1", "true", "yes")
     if not force_refresh and _camera_cache["data"] and (now - _camera_cache["fetched_at"]) < CAMERA_CACHE_TTL_SECONDS:
-        return jsonify(_camera_cache["data"]), 200
+        return jsonify(_with_display_names(_camera_cache["data"])), 200
 
     try:
         res = _nx_request("GET", "/rest/v1/devices", params={"_with": "id,name,physicalId,vendor,model,status"})
@@ -268,9 +275,43 @@ def get_cameras():
         result = _shape_devices(res.json())
         _camera_cache["data"] = result
         _camera_cache["fetched_at"] = now
-        return jsonify(result), 200
+        return jsonify(_with_display_names(result)), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+DISPLAY_NAME_MAX = 60
+
+
+def _with_display_names(cameras):
+    """Each camera with its display_name (falls back to the Nx name), applied
+    on every response so a rename shows at once despite the camera cache."""
+    names = SETTINGS.get("DISPLAY_NAMES") or {}
+    return {cid: {**c, "display_name": names.get(cid) or c.get("name")} for cid, c in cameras.items()}
+
+
+@app.route("/api/display-names", methods=["GET"])
+def display_names():
+    """{ "<camera id>": "Vault", ... }: only cameras someone named. For the
+    other modules (Zone Director, Scene Intelligence, the admin console)."""
+    return jsonify(SETTINGS.get("DISPLAY_NAMES") or {}), 200
+
+
+@app.route("/api/cameras/<camera_id>/display-name", methods=["PUT"])
+def set_display_name(camera_id):
+    """Body {"display_name": "Vault"}; an empty name goes back to the Nx name."""
+    clean_id = camera_id.strip("{}")
+    if not re.fullmatch(r"[0-9a-fA-F-]{8,64}", clean_id):
+        return jsonify({"status": "error", "message": "Not a camera id"}), 400
+    name = " ".join(str((request.json or {}).get("display_name") or "").split())[:DISPLAY_NAME_MAX]
+    names = dict(SETTINGS.get("DISPLAY_NAMES") or {})
+    if name:
+        names[clean_id] = name
+    else:
+        names.pop(clean_id, None)
+    SETTINGS["DISPLAY_NAMES"] = names
+    save_settings()
+    return jsonify({"id": clean_id, "display_name": name or None}), 200
 
 
 @app.route("/api/cameras/<camera_id>", methods=["GET"])
@@ -294,7 +335,7 @@ def resolve_camera():
     /api/stream's MJPEG. Never holds an Nx credential itself — this is the
     one place that does, per this module's ownership boundary.
 
-    Response: { id, name, rtsp_url }
+    Response: { id, name, display_name, rtsp_url }
     """
     camera_id = request.args.get("camera_id", "").strip("{}")
     if not camera_id:
@@ -311,6 +352,7 @@ def resolve_camera():
     return jsonify({
         "id": camera_id,
         "name": cam.get("name"),
+        "display_name": cam.get("display_name"),
         "rtsp_url": build_rtsp_url(camera_id),
     }), 200
 
