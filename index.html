@@ -41,14 +41,16 @@
     <div class="absolute top-0 left-0 w-72 h-72 sm:w-96 sm:h-96 bg-cyan-600/30 rounded-full mix-blend-screen filter blur-[80px] sm:blur-[120px] animate-float-slow transform -translate-x-1/2 -translate-y-1/4"></div>
     <div class="absolute bottom-0 right-0 w-72 h-72 sm:w-96 sm:h-96 bg-purple-600/30 rounded-full mix-blend-screen filter blur-[80px] sm:blur-[120px] animate-float-delayed transform translate-x-1/4 translate-y-1/4"></div>
 
-    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 -translate-y-[150%] transition-transform duration-500 ease-out bg-emerald-400/90 text-slate-950 px-6 py-2.5 rounded-full font-bold text-sm tracking-wide shadow-[0_0_30px_rgba(52,211,153,0.4)] z-50 flex items-center gap-2">
+    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 -translate-y-[150%] opacity-0 pointer-events-none transition-[transform,opacity] duration-500 ease-out bg-emerald-400/90 text-slate-950 px-6 py-2.5 rounded-full font-bold text-sm tracking-wide shadow-[0_0_30px_rgba(52,211,153,0.4)] z-50 flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
         <span id="toast-text">SAVED</span>
     </div>
 
     <div class="vs-scroll relative z-10 w-full min-w-0 max-w-6xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-3xl p-4 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] h-[95vh] overflow-y-auto">
 
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sticky top-0 bg-slate-950/20 backdrop-blur-md p-2 rounded-xl z-20">
+        <!-- Sticky header: stretches over the panel's own padding (negative top/margins,
+             same padding back) so nothing scrolls visibly above or behind it. -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sticky -top-4 sm:-top-10 z-20 -mx-4 sm:-mx-10 -mt-4 sm:-mt-10 px-4 sm:px-10 pt-4 sm:pt-8 pb-4 bg-slate-950 border-b border-white/10 rounded-t-3xl shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">VisionSync</h1>
                 <div class="text-xs text-slate-400 font-light">Camera Configuration — by Sentivise.AI</div>
@@ -398,7 +400,7 @@
             const sorted = [...allCameraEntries].sort((a, b) => (b.online === true) - (a.online === true));
             const placeholder = `<option value="" ${!view.cameraId ? 'selected' : ''} style="color:#64748b;background-color:#0f172a">— Select a camera —</option>`;
             select.innerHTML = placeholder + sorted.map(cam => {
-                const label = `${cam.name || cam.id} ${cam.online ? '● Online' : '○ Offline'}`;
+                const label = `${cam.display_name || cam.name || cam.id} ${cam.online ? '● Online' : '○ Offline'}`;
                 const selected = cam.id === view.cameraId ? 'selected' : '';
                 const color = cam.online ? '#34d399' : '#f43f5e';
                 return `<option value="${esc(cam.id)}" ${selected} style="color:${color};background-color:#0f172a">${esc(label)}</option>`;
@@ -582,8 +584,11 @@
                 t.classList.add('bg-emerald-400/90', 'shadow-[0_0_30px_rgba(52,211,153,0.4)]');
                 t.classList.remove('bg-rose-500/90', 'shadow-[0_0_30px_rgba(244,63,94,0.4)]', 'text-white');
             }
-            t.classList.remove('-translate-y-[150%]');
-            setTimeout(() => t.classList.add('-translate-y-[150%]'), 3000);
+            // Hidden = moved up AND transparent: moved up alone, its bottom edge and
+            // glow still peeked in as a thin green bar at the top of the page.
+            t.classList.remove('-translate-y-[150%]', 'opacity-0');
+            clearTimeout(t._hideTimer);
+            t._hideTimer = setTimeout(() => t.classList.add('-translate-y-[150%]', 'opacity-0'), 3000);
         }
 
         // =====================================================================
